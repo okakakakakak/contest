@@ -3,6 +3,7 @@ import processing.serial.*;
 Serial port1, port2, port3;
 
 // 表示用変数
+String name1 = "Zumo1", name2 = "Zumo2", name3 = "Zumo3"; // ← 機体名
 String mode1 = "UNKNOWN", mode2 = "UNKNOWN", mode3 = "UNKNOWN";
 String color1 = "", color2 = "", color3 = "";
 float dist1 = -1, dist2 = -1, dist3 = -1;
@@ -53,26 +54,24 @@ void setup() {
   fill(150); rect(width/2, height/2, width/2, height/2);
 }
 
-
 void draw() {
   // Zumo1（左上）
   fill(0); rect(0, 0, width/2, height/2);
   fill(255); textSize(40);
-  text("Zumo18 Mode: " + mode1, 20, tBaseY);
+  text(name1 + " Mode: " + mode1, 20, tBaseY);
   textSize(30);
   text("Distance: " + dist1 + " cm", 20, tBaseY + tDistY);
   text("Color: " + color1, 20, tBaseY + tDistY * 2);
   text("Heading: " + heading1 + "°", 20, tBaseY + tDistY * 3);
   text("Motor[L:" + motorL1 + " R:" + motorR1 + "]", 20, tBaseY + tDistY * 4);
   if (myString1 != null) {
-    textSize(30);
     text("Raw: " + myString1, 20, tBaseY + tDistY * 5);
   }
 
   // Zumo2（右上）
   fill(0); rect(width/2, 0, width/2, height/2);
   fill(255); textSize(40);
-  text("Zumo201 Mode: " + mode2, width/2 + 20, tBaseY);
+  text(name2 + " Mode: " + mode2, width/2 + 20, tBaseY);
   textSize(30);
   text("Distance: " + dist2 + " cm", width/2 + 20, tBaseY + tDistY);
   text("Color: " + color2, width/2 + 20, tBaseY + tDistY * 2);
@@ -85,7 +84,7 @@ void draw() {
   // Zumo3（左下）
   fill(0); rect(0, height/2, width/2, height/2);
   fill(255); textSize(40);
-  text("Zumo204 Mode: " + mode3, 20, height/2 + tBaseY);
+  text(name3 + " Mode: " + mode3, 20, height/2 + tBaseY);
   textSize(30);
   text("Distance: " + dist3 + " cm", 20, height/2 + tBaseY + tDistY);
   text("Color: " + color3, 20, height/2 + tBaseY + tDistY * 2);
@@ -101,7 +100,12 @@ void serialEvent(Serial p) {
   if (incoming != null) {
     incoming = trim(incoming);
 
-    if (incoming.startsWith("MODE:")) {
+    if (incoming.startsWith("NAME:")) {
+      String name = incoming.substring(5);
+      if (p == port1) name1 = name;
+      else if (p == port2) name2 = name;
+      else if (p == port3) name3 = name;
+    } else if (incoming.startsWith("MODE:")) {
       String modeStr = incoming.substring(5);
       if (p == port1) mode1 = modeStr;
       else if (p == port2) mode2 = modeStr;

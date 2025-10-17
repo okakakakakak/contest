@@ -59,6 +59,7 @@ float sum_e = 0;
 void setup() {
   Serial.begin(9600);
   delay(1000);
+  Serial.println("NAME:Zumo204"); // ← 機体名を送信
   
   Serial.println("========================================");
   Serial.println("  Zumo Robot Control System v2.1");

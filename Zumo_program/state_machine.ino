@@ -318,6 +318,16 @@ void task() {
     // 運搬状態（方位制御しながら前進）
     // ========================================
     case ESCAPE: {
+      // 要求どおり: ESCAPE中に赤色検知でGOALへ遷移する処理を追加
+      if (color == RED) {
+        motorL = motorR = SPEED_STOP;
+        motors.setSpeeds(motorL, motorR);
+        mode = GOAL;
+        start_time = millis();
+        sum_e = 0;
+        break;
+      }
+
       if (color == BLACK) {
         mode = AVOID;
         start_time = millis();
@@ -378,18 +388,67 @@ void task() {
     // ゴールラインまで運搬
     // ========================================
     case GOAL:
+      // まず1秒後退で安全距離を取る（従来どおり）
       if (millis() - start_time < 1000) {
-        // 1秒後退
         motorL = motorR = SPEED_REVERSE;
-      } else if (millis() - start_time < 1800) {
-        // 0.8秒回転
-        motorL = -SPEED_AVOID_ROT;
-        motorR = SPEED_AVOID_ROT;
+        motors.setSpeeds(motorL, motorR);
       } else {
-        mode = MOVE;
-        start_time = millis();
-        searchRotationCount = 0;
-        objectDetectedInSearch = false;
+        // 従来の短い回転時間ベースから、目標を「運搬時の方位の逆方向（+180°）」へ向けるまでの回転に変更
+        // 目標となる反対方向を計算（0-360に正規化）
+        float desiredHeading = TARGET_HEADING + 180.0;
+        if (desiredHeading >= 360.0) desiredHeading -= 360.0;
+
+        updateHeading();
+        // 角度誤差を計算（-180..180）
+        float heading_error = desiredHeading - heading_G;
+        while (heading_error < -180) heading_error += 360;
+        while (heading_error > 180) heading_error -= 360;
+
+        // 反応用にturnToを使って回転入力を得る
+        float u = turnTo(desiredHeading);
+
+        // 段階的な速度制御（大型回転は速め、微調整は遅め）
+        float speed_factor;
+        if (abs(heading_error) > 90) {
+          speed_factor = 1.0;
+        } else if (abs(heading_error) > 45) {
+          speed_factor = 0.9;
+        } else if (abs(heading_error) > 15) {
+          speed_factor = 0.85;
+        } else {
+          speed_factor = 0.8;
+        }
+
+        if (abs(u) < 2) {
+          motorL = motorR = SPEED_STOP;
+        } else {
+          motorL = u * speed_factor;
+          motorR = -u * speed_factor;
+          motorL = constrain(motorL, -130, 130);
+          motorR = constrain(motorR, -130, 130);
+        }
+
+        motors.setSpeeds(motorL, motorR);
+
+        // 目標（反対方向）に向いたら次のMOVEへ移行
+        if (abs(heading_error) < 10.0) {
+          motorL = motorR = SPEED_STOP;
+          motors.setSpeeds(motorL, motorR);
+          mode = MOVE;
+          start_time = millis();
+          searchRotationCount = 0;
+          objectDetectedInSearch = false;
+        }
+
+        // タイムアウト保護（9秒）
+        if (millis() - start_time > 9000) {
+          motorL = motorR = SPEED_STOP;
+          motors.setSpeeds(motorL, motorR);
+          mode = MOVE;
+          start_time = millis();
+          searchRotationCount = 0;
+          objectDetectedInSearch = false;
+        }
       }
       break;
 

@@ -1,0 +1,804 @@
+#include <ZumoMotors.h>
+#include <Adafruit_TCS34725.h>
+#include <LSM303.h>
+#include <Pushbutton.h>
+
+// ============================================
+// 色定義
+// ============================================
+#define WHITE    0
+#define BLACK    1
+#define RED      2
+#define BLUE     3
+#define OTHER    4
+
+// ============================================
+// 状態定義
+// ============================================
+#define INIT              0  // 初期状態
+#define SEARCH            1  // 探索
+#define CHECK_STATIC      2  // 物体の動き判定
+#define APPROACH          3  // 物体に直進
+#define TURN_TO_TARGET    4  // 目標方位に旋回
+#define WAIT_AFTER_TURN   5  // 旋回後待機
+#define ESCAPE            6  // 運搬
+#define AVOID             7  // 黒を回避
+#define STOP              8  // 停止
+#define MOVE              9  // 移動
+
+// ============================================
+// モーター速度定数
+// ============================================
+const int SPEED_ROTATE     = 140;
+const int SPEED_FORWARD    = 140;
+const int SPEED_ESCAPE     = 140;
+const int SPEED_REVERSE    = -140;
+const int SPEED_AVOID_ROT  = 140;
+const int SPEED_MOVE       = 140;
+const int SPEED_STOP       = 0;
+
+// ============================================
+// 目標方位角設定 (0-360度)
+// ============================================
+const float TARGET_HEADING = 210.0;  // 方向に運搬
+
+// ============================================
+// グローバル変数
+// ============================================
+
+// ボタン
+Pushbutton button(ZUMO_BUTTON);
+
+// モーター
+ZumoMotors motors;
+int motorL, motorR;
+
+// カラーセンサー
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_2_4MS, TCS34725_GAIN_60X);
+float r, g, b;
+unsigned int r_min = 60, g_min = 52, b_min = 62;
+unsigned int r_max = 255, g_max = 255, b_max = 255;
+int color, prevColor;
+
+// 地磁気センサー
+LSM303 compass;
+float mx, my;
+float heading_G;
+
+// 超音波センサー
+const int trig = 2;
+const int echo = 4;
+int dist;
+
+// 状態遷移
+int mode;
+int prevMode = -1;
+unsigned long start_time;
+unsigned long searchStartTime;
+unsigned long timeNow_G, timePrev_G;
+int searchRotationCount = 0;
+bool objectDetectedInSearch = false;
+
+// PI制御
+float sum_e = 0;
+const float KP = 2.0;
+const float TIinv = 2.0 / 1000.0;
+
+// ============================================
+// 関数プロトタイプ
+// ============================================
+int identify_color(int r, int g, int b);
+int distance();
+bool isCupStatic();
+void calibrationCompass();
+void calibrationColorSensor();
+void updateHeading();
+float turnTo(float psi_r);
+const char* getModeName(int mode);
+void printModeChange();
+void printStatus();
+void task();
+
+// ============================================
+// 色識別関数
+// ============================================
+int identify_color(int r, int g, int b) {
+  if (200 < r && 200 < g && 200 < b) return WHITE;
+  else if (r < 50 && g < 50 && b < 50) return BLACK;
+  else if (100 < r && g < 50 && b < 50) return WHITE;
+  else if (r < 50 && g < 50 && 70 < b) return WHITE;
+  else return OTHER;
+}
+
+// ============================================
+// 距離測定関数（超音波センサー）
+// ============================================
+int distance() {
+  unsigned long interval;
+  int dst;
+  
+  digitalWrite(trig, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trig, LOW);
+  
+  interval = pulseIn(echo, HIGH, 5767);
+  dst = (0.61 * 25 + 331.5) * interval / 10000 / 2;
+  
+  if (dst == 0) dst = 100;
+  delay(60);
+  
+  return dst;
+}
+
+// ============================================
+// 物体静止判定関数
+// ============================================
+bool isCupStatic() {
+  const int checkDuration = 500;
+  const int interval = 100;
+  const int threshold = 3;
+  const int delta = 2;
+
+  motors.setSpeeds(SPEED_STOP, SPEED_STOP);
+
+  int prev = distance();
+  int changes = 0;
+  unsigned long checkStart = millis();
+
+  while (millis() - checkStart < checkDuration) {
+    int now = distance();
+    if (abs(now - prev) > delta) {
+      changes++;
+    }
+    prev = now;
+    delay(interval);
+  }
+
+  return (changes < threshold);
+}
+
+// ============================================
+// 地磁気センサーキャリブレーション
+// ============================================
+void calibrationCompass() {
+  unsigned long startTime = millis();
+  
+  Serial.println("[CALIB] Calibration started - rotating for 10 seconds...");
+  
+  while (millis() - startTime < 10000) {
+    compass.read();
+    
+    // 最小値・最大値の更新
+    if (compass.m.x < compass.m_min.x) compass.m_min.x = compass.m.x;
+    if (compass.m.x > compass.m_max.x) compass.m_max.x = compass.m.x;
+    if (compass.m.y < compass.m_min.y) compass.m_min.y = compass.m.y;
+    if (compass.m.y > compass.m_max.y) compass.m_max.y = compass.m.y;
+    
+    motors.setSpeeds(120, -120);
+  }
+  
+  motors.setSpeeds(SPEED_STOP, SPEED_STOP);
+  delay(500);
+}
+
+// ================================
+// カラーセンサーキャリブレーション
+// ================================
+void calibrationColorSensor() {
+  unsigned long timeInit;
+  uint16_t r, g, b, clr;  // ← unsigned int から uint16_t に変更
+  
+  Serial.println("[CALIB] Color sensor calibration started...");
+  Serial.println("[CALIB] Move forward for 2 seconds to sample colors");
+  
+  motors.setSpeeds(60, 60); 
+
+  // 初期化：最小値を大きく、最大値を小さく設定
+  r_min = 65535;  // ← 30000 から変更
+  g_min = 65535;
+  b_min = 65535;
+  r_max = 0;
+  g_max = 0;
+  b_max = 0;
+
+  timeInit = millis();
+
+  while (millis() - timeInit < 2000) {
+    tcs.getRawData(&r, &g, &b, &clr);  // ← tcs.getRGB から変更
+  
+    // 最小値の更新
+    if (r < r_min) r_min = r;
+    if (g < g_min) g_min = g;
+    if (b < b_min) b_min = b;
+    
+    // 最大値の更新
+    if (r > r_max) r_max = r;
+    if (g > g_max) g_max = g;
+    if (b > b_max) b_max = b;
+    
+    delay(50);  // ← サンプリング間隔を追加
+  }
+  
+  motors.setSpeeds(SPEED_STOP, SPEED_STOP);
+  
+  // キャリブレーション結果を表示（以下すべて追加）
+  Serial.println("[CALIB] Color sensor calibration complete!");
+  Serial.print("[CALIB] R range: ");
+  Serial.print(r_min);
+  Serial.print(" to ");
+  Serial.println(r_max);
+  Serial.print("[CALIB] G range: ");
+  Serial.print(g_min);
+  Serial.print(" to ");
+  Serial.println(g_max);
+  Serial.print("[CALIB] B range: ");
+  Serial.print(b_min);
+  Serial.print(" to ");
+  Serial.println(b_max);
+  
+  // 値が有効かチェック
+  if (r_max <= r_min) {
+    Serial.println("[WARNING] R calibration may be invalid!");
+    r_min = 60;
+    r_max = 255;
+  }
+  if (g_max <= g_min) {
+    Serial.println("[WARNING] G calibration may be invalid!");
+    g_min = 52;
+    g_max = 255;
+  }
+  if (b_max <= b_min) {
+    Serial.println("[WARNING] B calibration may be invalid!");
+    b_min = 62;
+    b_max = 255;
+  }
+}
+
+// ============================================
+// RGB値取得関数
+// ============================================
+void getRGB(float& r0, float& g0, float& b0) {
+  uint16_t r, g, b, clr;
+
+  tcs.getRawData(&r, &g, &b, &clr);
+ 
+  r0 = map(r, r_min, r_max, 0, 255);
+  g0 = map(g, g_min, g_max, 0, 255);
+  b0 = map(b, b_min, b_max, 0, 255);
+
+  // 範囲制限
+  if (r0 < 0.0) r0 = 0.0;
+  if (r0 > 255.0) r0 = 255.0;
+  if (g0 < 0.0) g0 = 0.0;
+  if (g0 > 255.0) g0 = 255.0;
+  if (b0 < 0.0) b0 = 0.0;
+  if (b0 > 255.0) b0 = 255.0;
+}
+
+// ============================================
+// 現在の方位角取得
+// ============================================
+void updateHeading() {
+  compass.read();
+  mx = map(compass.m.x, compass.m_min.x, compass.m_max.x, -128, 127);
+  my = map(compass.m.y, compass.m_min.y, compass.m_max.y, -128, 127);
+  heading_G = atan2(my, mx) * 180.0 / M_PI;
+  if (heading_G < 0) heading_G += 360;
+}
+
+// ============================================
+// PI制御による方位制御
+// ============================================
+float turnTo(float psi_r) {
+  float u;
+  
+  updateHeading();
+  
+  float e = psi_r - heading_G;
+  
+  // 角度誤差を-180〜180度の範囲に正規化
+  while (e < -180) e += 360;
+  while (e > 180) e -= 360;
+  
+  if (abs(e) > 45.0) {
+    // |e|>45° の場合はP制御
+    u = KP * e;
+    sum_e = 0;
+  } else {
+    // |e|<=45° の場合はPI制御
+    sum_e += TIinv * e * (timeNow_G - timePrev_G);
+    sum_e = constrain(sum_e, -50, 50);  // アンチワインドアップ
+    u = KP * (e + sum_e);
+  }
+  
+  // 制御入力の制限
+  u = constrain(u, -180, 180);
+  
+  return u;
+}
+
+// ============================================
+// モード名取得
+// ============================================
+const char* getModeName(int mode) {
+  switch (mode) {
+    case INIT:            return "INIT";
+    case SEARCH:          return "SEARCH";
+    case CHECK_STATIC:    return "CHECK_STATIC";
+    case APPROACH:        return "APPROACH";
+    case TURN_TO_TARGET:  return "TURN_TO_TARGET";
+    case WAIT_AFTER_TURN: return "WAIT_AFTER_TURN";
+    case ESCAPE:          return "ESCAPE";
+    case AVOID:           return "AVOID";
+    case STOP:            return "STOP";
+    case MOVE:            return "MOVE";
+    default:              return "UNKNOWN";
+  }
+}
+
+// ============================================
+// モード変更通知
+// ============================================
+void printModeChange() {
+  if (mode != prevMode) {
+    Serial.print(">>> MODE CHANGE: ");
+    Serial.print(getModeName(prevMode));
+    Serial.print(" -> ");
+    Serial.println(getModeName(mode));
+    prevMode = mode;
+  }
+}
+
+// ============================================
+// ステータス表示（500msごと）
+// ============================================
+void printStatus() {
+  static unsigned long lastPrintTime = 0;
+  unsigned long currentTime = millis();
+  
+  if (currentTime - lastPrintTime >= 500) {
+    Serial.print("[");
+    Serial.print(getModeName(mode));
+    Serial.print("] ");
+    
+    // 距離情報
+    Serial.print("Dist:");
+    Serial.print(dist);
+    Serial.print("cm ");
+    
+    // 色情報
+    Serial.print("Color:");
+    switch(color) {
+      case WHITE: Serial.print("WHITE "); break;
+      case BLACK: Serial.print("BLACK "); break;
+      case RED:   Serial.print("RED ");   break;
+      case BLUE:  Serial.print("BLUE ");  break;
+      default:    Serial.print("OTHER "); break;
+    }
+    
+    // 方位情報（必要な状態のみ）
+    if (mode == TURN_TO_TARGET || mode == WAIT_AFTER_TURN || mode == ESCAPE) {
+      Serial.print("Heading:");
+      Serial.print(heading_G, 1);
+      Serial.print("° Target:");
+      Serial.print(TARGET_HEADING, 1);
+      Serial.print("° Error:");
+      
+      float error = TARGET_HEADING - heading_G;
+      while (error < -180) error += 360;
+      while (error > 180) error -= 360;
+      Serial.print(error, 1);
+      Serial.print("° ");
+    }
+    
+    // モーター速度
+    Serial.print("Motor[L:");
+    Serial.print(motorL);
+    Serial.print(" R:");
+    Serial.print(motorR);
+    Serial.print("]");
+    
+    Serial.println();
+    lastPrintTime = currentTime;
+  }
+
+   // モード送信（Processing用）
+  Serial.print("MODE:");
+  Serial.println(getModeName(mode));
+
+  // 距離送信
+  Serial.print("DIST:");
+  Serial.println(dist);
+
+  // 色識別送信
+  Serial.print("COLOR:");
+  switch(color) {
+    case WHITE: Serial.println("WHITE"); break;
+    case BLACK: Serial.println("BLACK"); break;
+    case RED:   Serial.println("RED");   break;
+    case BLUE:  Serial.println("BLUE");  break;
+    default:    Serial.println("OTHER"); break;
+  }
+
+  // 方位角送信（必要なモードのみ）
+  if (mode == TURN_TO_TARGET || mode == WAIT_AFTER_TURN || mode == ESCAPE) {
+    Serial.print("HEADING:");
+    Serial.println(heading_G, 1); // 小数1桁で送信
+  }
+
+  // モーター速度送信
+  Serial.print("MOTOR:");
+  Serial.print(motorL);
+  Serial.print(",");
+  Serial.println(motorR);
+
+}
+
+// ============================================
+// メインタスク（状態遷移）
+// ============================================
+void task() {
+  timeNow_G = millis();
+  printModeChange();
+  
+  switch (mode) {
+    // ========================================
+    // 初期状態
+    // ========================================
+    case INIT:
+      mode = SEARCH;
+      searchStartTime = millis();
+      searchRotationCount = 0;
+      objectDetectedInSearch = false;
+      sum_e = 0;
+      break;
+
+    // ========================================
+    // 探索状態（回転して物体を探す）
+    // ========================================
+    case SEARCH: {
+      // 物体検出判定
+      if (dist > 0 && dist < 30) {
+        if (!objectDetectedInSearch) {
+          objectDetectedInSearch = true;
+          searchRotationCount = 0;
+        }
+        searchRotationCount++;
+        
+        // 3回連続検出で確定
+        if (searchRotationCount >= 3) {
+          motorL = motorR = SPEED_STOP;
+          motors.setSpeeds(motorL, motorR);
+          delay(100);
+          mode = CHECK_STATIC;
+          searchRotationCount = 0;
+          objectDetectedInSearch = false;
+          break;
+        }
+      } else {
+        // 物体が見えなくなったらリセット
+        if (objectDetectedInSearch && searchRotationCount < 3) {
+          searchRotationCount = 0;
+          objectDetectedInSearch = false;
+        }
+      }
+      
+      // 回転して探索
+      motorL = -SPEED_ROTATE;
+      motorR = SPEED_ROTATE;
+      
+      // 5秒経過で移動モードへ
+      if (millis() - searchStartTime > 5000) {
+        motorL = motorR = SPEED_STOP;
+        mode = MOVE;
+        start_time = millis();
+        searchRotationCount = 0;
+        objectDetectedInSearch = false;
+      }
+      break;
+    }
+
+    // ========================================
+    // 移動状態（場所を変える）
+    // ========================================
+    case MOVE:
+      motorL = motorR = SPEED_MOVE;
+      
+      if (color == BLACK) {
+        mode = AVOID;
+        start_time = millis();
+      } else if (dist > 0 && dist < 30) {
+        motorL = motorR = SPEED_STOP;
+        mode = CHECK_STATIC;
+        searchRotationCount = 0;
+        objectDetectedInSearch = false;
+      } else if (millis() - start_time > 2000) {
+        // 2秒前進後、再探索
+        motorL = motorR = SPEED_STOP;
+        mode = SEARCH;
+        searchStartTime = millis();
+        searchRotationCount = 0;
+        objectDetectedInSearch = false;
+      }
+      break;
+
+    // ========================================
+    // 静止判定状態
+    // ========================================
+    case CHECK_STATIC:
+      if (isCupStatic()) {
+        mode = APPROACH;
+      } else {
+        mode = SEARCH;
+        searchStartTime = millis();
+        searchRotationCount = 0;
+        objectDetectedInSearch = false;
+      }
+      break;
+
+    // ========================================
+    // 接近状態（カップに直進）
+    // ========================================
+    case APPROACH:
+      if (color == BLACK) {
+        mode = AVOID;
+        start_time = millis();
+        break;
+      }
+      
+      motorL = motorR = SPEED_FORWARD;
+      
+      if (dist < 7) {
+        mode = TURN_TO_TARGET;
+        start_time = millis();
+        sum_e = 0;
+      }
+      break;
+
+    // ========================================
+    // 旋回状態（目標方位に向く）
+    // ========================================
+    case TURN_TO_TARGET: {
+      // 回転開始前の待機時間を短縮（カップを安定させる）
+      if (millis() - start_time < 100) {
+        motorL = motorR = SPEED_STOP;
+        motors.setSpeeds(motorL, motorR);
+        break;
+      }
+      
+      updateHeading();
+      float u = turnTo(TARGET_HEADING);
+      
+      // 角度誤差を計算
+      float heading_error = TARGET_HEADING - heading_G;
+      while (heading_error < -180) heading_error += 360;
+      while (heading_error > 180) heading_error -= 360;
+      
+      // 段階的な速度制御（速度を上げて時間短縮）
+      float speed_factor;
+      if (abs(heading_error) > 90) {
+        speed_factor = 1.0;      // 大角度：100%
+      } else if (abs(heading_error) > 45) {
+        speed_factor = 0.9;      // 中角度：90%
+      } else if (abs(heading_error) > 15) {
+        speed_factor = 0.85;      // 小角度：85%
+      } else {
+        speed_factor = 0.8;      // 微調整：80%
+      }
+      
+      // 制御入力にスピードファクターを適用
+      if (abs(u) < 2) {
+        motorL = motorR = SPEED_STOP;
+      } else {
+        motorL = u * speed_factor;
+        motorR = -u * speed_factor;
+        
+        // 最大速度を少し上げる（カップが外れない範囲で）
+        motorL = constrain(motorL, -130, 130);
+        motorR = constrain(motorR, -130, 130);
+      }
+      
+      // 目標方位の許容誤差を少し緩く（10度以内）
+      if (abs(heading_error) < 10.0) {
+        motorL = motorR = SPEED_STOP;
+        motors.setSpeeds(motorL, motorR);
+        mode = WAIT_AFTER_TURN;
+        start_time = millis();
+        sum_e = 0;
+      }
+      
+      // タイムアウト（8秒に短縮）
+      if (millis() - start_time > 8000) {
+        motorL = motorR = SPEED_STOP;
+        motors.setSpeeds(motorL, motorR);
+        mode = WAIT_AFTER_TURN;
+        start_time = millis();
+        sum_e = 0;
+      }
+      break;
+    }
+
+    // ========================================
+    // 旋回後待機状態（カップを安定させる）
+    // ========================================
+    case WAIT_AFTER_TURN:
+      motorL = motorR = SPEED_STOP;
+      motors.setSpeeds(motorL, motorR);
+      
+      if (millis() - start_time >= 500) {  // 0.5秒待機
+        mode = ESCAPE;
+        sum_e = 0;
+      }
+      break;
+
+    // ========================================
+    // 運搬状態（方位制御しながら前進）
+    // ========================================
+    case ESCAPE: {
+      if (color == BLACK) {
+        mode = AVOID;
+        start_time = millis();
+        break;
+      }
+      
+      // PI制御で方位を維持しながら前進
+      float control_u = turnTo(TARGET_HEADING);
+      
+      // 不感帯を設けて振動を防止
+      if (abs(control_u) < 3) {
+        control_u = 0;
+      }
+      
+      // 基本速度に制御入力を加算
+      motorL = SPEED_ESCAPE + control_u * 0.3;
+      motorR = SPEED_ESCAPE - control_u * 0.3;
+      
+      // モーター速度の制限
+      motorL = constrain(motorL, -200, 200);
+      motorR = constrain(motorR, -200, 200);
+      
+      // 黒から白に戻ったら停止
+      if (prevColor == BLACK && color == WHITE) {
+        motorL = motorR = SPEED_STOP;
+        motors.setSpeeds(motorL, motorR);
+        mode = STOP;
+      }
+      break;
+    }
+
+    // ========================================
+    // 回避状態（黒線を回避）
+    // ========================================
+    case AVOID:
+      if (millis() - start_time < 300) {
+        // 0.3秒後退
+        motorL = motorR = SPEED_REVERSE;
+      } else if (millis() - start_time < 700) {
+        // 0.4秒回転
+        motorL = -SPEED_AVOID_ROT;
+        motorR = SPEED_AVOID_ROT;
+      } else {
+        // 次の状態へ
+        mode = (dist < 5 ? TURN_TO_TARGET : SEARCH);
+        if (mode == SEARCH) {
+          searchStartTime = millis();
+          searchRotationCount = 0;
+          objectDetectedInSearch = false;
+        } else {
+          start_time = millis();
+        }
+        sum_e = 0;
+      }
+      break;
+
+    // ========================================
+    // 停止状態
+    // ========================================
+    case STOP:
+      motorL = motorR = SPEED_STOP;
+      motors.setSpeeds(motorL, motorR);
+      break;
+  }
+  
+  timePrev_G = timeNow_G;
+}
+
+// ============================================
+// セットアップ
+// ============================================
+void setup() {
+  Serial.begin(9600);
+  delay(1000);
+  
+  Serial.println("========================================");
+  Serial.println("  Zumo Robot Control System v2.1");
+  Serial.println("========================================");
+  Serial.print("Target Heading: ");
+  Serial.print(TARGET_HEADING);
+  Serial.println(" degrees");
+  Serial.println("----------------------------------------");
+  
+  // カラーセンサー初期化
+  if (tcs.begin()) {
+    Serial.println("[INIT] Color sensor initialized");
+  } else {
+    Serial.println("[ERROR] Color sensor not found!");
+    while (1);
+  }
+  
+  // 地磁気センサー初期化
+  compass.init();
+  compass.enableDefault();
+  compass.m_min.x = -32767;
+  compass.m_min.y = -32767;
+  compass.m_max.x = 32767;
+  compass.m_max.y = 32767;
+  Serial.println("[INIT] Compass initialized");
+  
+  // ピン設定
+  pinMode(trig, OUTPUT);
+  pinMode(echo, INPUT);
+  Serial.println("[INIT] Pins configured");
+  
+  // キャリブレーション実施
+  Serial.println("----------------------------------------");
+  Serial.println("[CALIB] Starting COMPASS CALIBRATION...");
+  Serial.println("[CALIB] Press button to start");
+  button.waitForButton();
+  
+  Serial.println("[CALIB] ROTATE the robot for 10 seconds");
+  calibrationCompass();
+  Serial.println("[CALIB] Compass calibration COMPLETE!");
+  Serial.print("[CALIB] X range: ");
+  Serial.print(compass.m_min.x);
+  Serial.print(" to ");
+  Serial.println(compass.m_max.x);
+  Serial.print("[CALIB] Y range: ");
+  Serial.print(compass.m_min.y);
+  Serial.print(" to ");
+  Serial.println(compass.m_max.y);
+  Serial.println("----------------------------------------");
+  
+  // カラーセンサーキャリブレーション
+  Serial.println("[CALIB] Press button to START COLOR CALIBRATION");
+  button.waitForButton();
+  calibrationColorSensor();
+  Serial.println("----------------------------------------");
+
+  // 動作開始待機
+  Serial.println("[READY] Press button to START OPERATION");
+  button.waitForButton();
+
+  // 初期化完了
+  mode = INIT;
+  prevMode = -1;
+  motorL = motorR = SPEED_STOP;
+  timeNow_G = timePrev_G = millis();
+  
+  Serial.println("[READY] System ready! Starting operation...");
+  Serial.println("========================================");
+  Serial.println();
+}
+
+// ============================================
+// メインループ
+// ============================================
+void loop() {
+  // モーター駆動
+  motors.setSpeeds(motorL, motorR);
+
+  // 色を計測
+  prevColor = color;
+  getRGB(r, g, b);
+  color = identify_color((int)r, (int)g, (int)b);
+
+  // 距離計測
+  dist = distance();
+
+  // タスク実行
+  task();
+  
+  // ステータス表示
+  printStatus();
+
+}

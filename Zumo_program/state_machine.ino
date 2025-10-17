@@ -15,6 +15,7 @@ const char* getModeName(int mode) {
     case AVOID:           return "AVOID";
     case STOP:            return "STOP";
     case MOVE:            return "MOVE";
+    case GOAL:            return "GOAL";
     default:              return "UNKNOWN";
   }
 }
@@ -374,6 +375,25 @@ void task() {
       break;
 
     // ========================================
+    // ゴールラインまで運搬
+    // ========================================
+    case GOAL:
+      if (millis() - start_time < 1000) {
+        // 1秒後退
+        motorL = motorR = SPEED_REVERSE;
+      } else if (millis() - start_time < 1800) {
+        // 0.8秒回転
+        motorL = -SPEED_AVOID_ROT;
+        motorR = SPEED_AVOID_ROT;
+      } else {
+        mode = MOVE;
+        start_time = millis();
+        searchRotationCount = 0;
+        objectDetectedInSearch = false;
+      }
+      break;
+
+    // ========================================
     // 停止状態
     // ========================================
     case STOP:
@@ -383,4 +403,5 @@ void task() {
   }
   
   timePrev_G = timeNow_G;
+
 }

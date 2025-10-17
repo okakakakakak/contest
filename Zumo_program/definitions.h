@@ -28,6 +28,7 @@
 #define AVOID             7
 #define STOP              8
 #define MOVE              9
+#define GOAL              10
 
 // ============================================
 // モーター速度定数
@@ -105,5 +106,6 @@ const char* getModeName(int mode);
 void printModeChange();
 void printStatus();
 void task();
+
 
 #endif

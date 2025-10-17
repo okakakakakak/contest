@@ -19,20 +19,40 @@ int tDistY = 30;
 
 void setup() {
   size(1200, 800);
-  port1 = new Serial(this, "COM4", 9600);
-  port1.clear(); port1.bufferUntil(0x0d);
 
-  port2 = new Serial(this, "COM5", 9600);
-  port2.clear(); port2.bufferUntil(0x0d);
+  try {
+    port1 = new Serial(this, "COM4", 9600);
+    port1.clear(); port1.bufferUntil(0x0d);
+    println("COM4 connected");
+  } catch (Exception e) {
+    println("COM4 not available");
+    port1 = null;
+  }
 
-  port3 = new Serial(this, "COM6", 9600);
-  port3.clear(); port3.bufferUntil(0x0d);
+  try {
+    port2 = new Serial(this, "COM5", 9600);
+    port2.clear(); port2.bufferUntil(0x0d);
+    println("COM5 connected");
+  } catch (Exception e) {
+    println("COM5 not available");
+    port2 = null;
+  }
+
+  try {
+    port3 = new Serial(this, "COM6", 9600);
+    port3.clear(); port3.bufferUntil(0x0d);
+    println("COM6 connected");
+  } catch (Exception e) {
+    println("COM6 not available");
+    port3 = null;
+  }
 
   background(0);
   fill(100); rect(width/2, 0, width/2, height/2);
   fill(200); rect(0, height/2, width/2, height/2);
   fill(150); rect(width/2, height/2, width/2, height/2);
 }
+
 
 void draw() {
   // Zumo1（左上）

@@ -1,57 +1,21 @@
 #include "definitions.h"
 
 // ============================================
-// モーター速度定数
-// ============================================
-const int SPEED_ROTATE     = 140;
-const int SPEED_FORWARD    = 140;
-const int SPEED_ESCAPE     = 140;
-const int SPEED_REVERSE    = -140;
-const int SPEED_AVOID_ROT  = 140;
-const int SPEED_MOVE       = 140;
-const int SPEED_STOP       = 0;
-
-// ============================================
-// 目標方位角設定
-// ============================================
-const float TARGET_HEADING = 210.0;
-
-// ============================================
-// PI制御定数
-// ============================================
-const float KP = 2.0;
-const float TIinv = 2.0 / 1000.0;
-
-// ============================================
-// グローバル変数定義
+// グローバルオブジェクト定義
 // ============================================
 Pushbutton button(ZUMO_BUTTON);
-ZumoMotors motors;
-int motorL, motorR;
+MotorController motor_ctrl;
+ColorSensorState color_sensor;
+CompassState compass_state;
+UltrasonicSensor ultrasonic(2, 4);
+RobotState robot_state;
+PIController pi_ctrl;
 
-Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_2_4MS, TCS34725_GAIN_60X);
-float r, g, b;
-unsigned int r_min = 60, g_min = 52, b_min = 62;
-unsigned int r_max = 255, g_max = 255, b_max = 255;
-int color, prevColor;
-
-LSM303 compass;
-float mx, my;
-float heading_G;
-
-const int trig = 2;
-const int echo = 4;
-int dist;
-
-int mode;
-int prevMode = -1;
-unsigned long start_time;
-unsigned long searchStartTime;
-unsigned long timeNow_G, timePrev_G;
-int searchRotationCount = 0;
-bool objectDetectedInSearch = false;
-
-float sum_e = 0;
+// ============================================
+// 定数定義
+// ============================================
+const float TARGET_HEADING = 177.0;
+const float MAGNETIC_DECLINATION = -7.0;
 
 // ============================================
 // セットアップ
@@ -59,10 +23,9 @@ float sum_e = 0;
 void setup() {
   Serial.begin(9600);
   delay(1000);
-  Serial.println("NAME:Zumo204"); // ← 機体名を送信
   
   Serial.println("========================================");
-  Serial.println("  Zumo Robot Control System v2.1");
+  Serial.println("  Zumo Robot Control System v3.0");
   Serial.println("========================================");
   Serial.print("Target Heading: ");
   Serial.print(TARGET_HEADING);
@@ -70,7 +33,7 @@ void setup() {
   Serial.println("----------------------------------------");
   
   // カラーセンサー初期化
-  if (tcs.begin()) {
+  if (color_sensor.tcs.begin()) {
     Serial.println("[INIT] Color sensor initialized");
   } else {
     Serial.println("[ERROR] Color sensor not found!");
@@ -78,42 +41,32 @@ void setup() {
   }
   
   // 地磁気センサー初期化
-  compass.init();
-  compass.enableDefault();
-  compass.m_min.x = -32767;
-  compass.m_min.y = -32767;
-  compass.m_max.x = 32767;
-  compass.m_max.y = 32767;
+  compass_state.compass.init();
+  compass_state.compass.enableDefault();
+  compass_state.compass.m_min.x = -32767;
+  compass_state.compass.m_min.y = -32767;
+  compass_state.compass.m_max.x = 32767;
+  compass_state.compass.m_max.y = 32767;
   Serial.println("[INIT] Compass initialized");
   
-  // ピン設定
-  pinMode(trig, OUTPUT);
-  pinMode(echo, INPUT);
-  Serial.println("[INIT] Pins configured");
+  // 超音波センサー初期化
+  ultrasonic.init();
+  Serial.println("[INIT] Ultrasonic sensor initialized");
   
   // キャリブレーション実施
   Serial.println("----------------------------------------");
-  Serial.println("[CALIB] Starting COMPASS CALIBRATION...");
-  Serial.println("[CALIB] Press button to start");
+  Serial.println("[CALIB] Press button to start COMPASS calibration");
   button.waitForButton();
   
-  Serial.println("[CALIB] ROTATE the robot for 10 seconds");
-  calibrationCompass();
+  Serial.println("[CALIB] ROTATE the robot for 15 seconds");
+  calibrationCompassAdvanced();
   Serial.println("[CALIB] Compass calibration COMPLETE!");
-  Serial.print("[CALIB] X range: ");
-  Serial.print(compass.m_min.x);
-  Serial.print(" to ");
-  Serial.println(compass.m_max.x);
-  Serial.print("[CALIB] Y range: ");
-  Serial.print(compass.m_min.y);
-  Serial.print(" to ");
-  Serial.println(compass.m_max.y);
   Serial.println("----------------------------------------");
   
   // カラーセンサーキャリブレーション
-  Serial.println("[CALIB] Press button to START COLOR CALIBRATION");
+  Serial.println("[CALIB] Press button to START COLOR calibration");
   button.waitForButton();
-  calibrationColorSensor();
+  color_sensor.calibrate();
   Serial.println("----------------------------------------");
 
   // 動作開始待機
@@ -121,10 +74,8 @@ void setup() {
   button.waitForButton();
 
   // 初期化完了
-  mode = INIT;
-  prevMode = -1;
-  motorL = motorR = SPEED_STOP;
-  timeNow_G = timePrev_G = millis();
+  robot_state.mode = STATE_INIT;
+  robot_state.time_now = robot_state.time_prev = millis();
   
   Serial.println("[READY] System ready! Starting operation...");
   Serial.println("========================================");
@@ -135,16 +86,11 @@ void setup() {
 // メインループ
 // ============================================
 void loop() {
-  // モーター駆動
-  motors.setSpeeds(motorL, motorR);
-
   // 色を計測
-  prevColor = color;
-  getRGB(r, g, b);
-  color = identify_color((int)r, (int)g, (int)b);
-
-  // 距離計測
-  dist = distance();
+  color_sensor.previous_color = color_sensor.current_color;
+  float r, g, b;
+  color_sensor.getRGB(r, g, b);
+  color_sensor.current_color = color_sensor.identifyColor((int)r, (int)g, (int)b);
 
   // タスク実行
   task();

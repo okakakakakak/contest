@@ -13,6 +13,7 @@ const char str_escape[] PROGMEM = "TRANSPORT";
 const char str_avoid[] PROGMEM = "AVOID";
 const char str_stop[] PROGMEM = "STOP";
 const char str_move[] PROGMEM = "MOVE";
+const char str_climb[] PROGMEM = "CLIMB";
 const char str_check_zone[] PROGMEM = "CHECK_ZONE";
 const char str_deposit[] PROGMEM = "DEPOSIT";
 const char str_unknown[] PROGMEM = "UNKNOWN";
@@ -20,11 +21,13 @@ const char str_unknown[] PROGMEM = "UNKNOWN";
 const char* const mode_names[] PROGMEM = {
   str_init, str_search, str_check, str_approach, str_turn,
   str_wait, str_escape, str_avoid, str_stop, str_move,
-  str_check_zone, str_deposit
+  str_climb,
+  str_check_zone, 
+  str_deposit
 };
 
 void printModeName(byte mode) {
-  if (mode < 12) {
+  if (mode < 13) {
     char buffer[20];
     strcpy_P(buffer, (char*)pgm_read_word(&(mode_names[mode])));
     Serial.print(buffer);
@@ -92,6 +95,19 @@ void printStatus() {
     Serial.print(",");
     Serial.println(motorR);
 
+    // 加速度センサ（X, Y, Z）
+    compass_state.compass.readAcc();  // LSM303から加速度取得
+    int ax = compass_state.compass.a.x;
+    int ay = compass_state.compass.a.y;
+    int az = compass_state.compass.a.z;
+
+    Serial.print("ACCEL:");
+    Serial.print(ax);
+    Serial.print(",");
+    Serial.print(ay);
+    Serial.print(",");
+    Serial.println(az);
+
     lastPrintTime = currentTime;
   }
 }
@@ -153,6 +169,15 @@ void task() {
     case STATE_MOVE:
       motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE);
       
+      // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
+      if (isSlopeDetected()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_CLIMB;
+        robot_state.state_start_time = millis();
+        pi_ctrl.reset();
+        break;
+      }
+
       if (color_sensor.current_color == COLOR_BLACK) {
         robot_state.mode = STATE_AVOID;
         robot_state.state_start_time = millis();
@@ -168,6 +193,10 @@ void task() {
         robot_state.search_rotation_count = 0;
         robot_state.object_detected_in_search = false;
       }
+      break;
+
+    case STATE_CLIMB: // 💡 NEW: 坂道登坂モード
+      runClimbMode(); // 💡 climb_control.ino の関数を呼び出し
       break;
 
     case STATE_CHECK_STATIC:

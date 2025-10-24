@@ -16,7 +16,7 @@ void ColorSensorState::getRGB(float& r, float& g, float& b) {
   b = constrain(b, 0.0, 255.0);
 }
 
-int ColorSensorState::identifyColor(int r, int g, int b) {
+byte ColorSensorState::identifyColor(int r, int g, int b) {
   if (200 < r && 200 < g && 200 < b) return COLOR_WHITE;
   else if (r < 50 && g < 50 && b < 50) return COLOR_BLACK;
   else if (100 < r && g < 50 && b < 50) return COLOR_WHITE;
@@ -25,8 +25,7 @@ int ColorSensorState::identifyColor(int r, int g, int b) {
 }
 
 void ColorSensorState::calibrate() {
-  Serial.println("[CALIB] Color sensor calibration started...");
-  Serial.println("[CALIB] Move forward for 2 seconds to sample colors");
+  Serial.println(F("Calibrating..."));
   
   motor_ctrl.setSpeeds(60, 60);
 
@@ -56,33 +55,16 @@ void ColorSensorState::calibrate() {
   
   motor_ctrl.stop();
   
-  Serial.println("[CALIB] Color sensor calibration complete!");
-  Serial.print("[CALIB] R range: ");
-  Serial.print(r_min);
-  Serial.print(" to ");
-  Serial.println(r_max);
-  Serial.print("[CALIB] G range: ");
-  Serial.print(g_min);
-  Serial.print(" to ");
-  Serial.println(g_max);
-  Serial.print("[CALIB] B range: ");
-  Serial.print(b_min);
-  Serial.print(" to ");
-  Serial.println(b_max);
-  
-  // 値が有効かチェック
+  // 値が有効かチェック（簡略版）
   if (r_max <= r_min) {
-    Serial.println("[WARNING] R calibration may be invalid!");
     r_min = 60;
     r_max = 255;
   }
   if (g_max <= g_min) {
-    Serial.println("[WARNING] G calibration may be invalid!");
     g_min = 52;
     g_max = 255;
   }
   if (b_max <= b_min) {
-    Serial.println("[WARNING] B calibration may be invalid!");
     b_min = 62;
     b_max = 255;
   }
@@ -168,14 +150,14 @@ void CompassState::updateHeading(float magnetic_declination) {
   heading_index = (heading_index + 1) % HEADING_FILTER_SIZE;
   
   float sum = 0;
-  for (int i = 0; i < HEADING_FILTER_SIZE; i++) {
+  for (byte i = 0; i < HEADING_FILTER_SIZE; i++) {
     sum += heading_buffer[i];
   }
   current_heading = sum / HEADING_FILTER_SIZE;
 }
 
 // ============================================
-// コンパスキャリブレーション（グローバル関数として残す）
+// コンパスキャリブレーション（簡略版）
 // ============================================
 static void updateMinMax(int x, int y, float& mx_min, float& mx_max, float& my_min, float& my_max) {
   if (x < mx_min) mx_min = x;
@@ -187,45 +169,38 @@ static void updateMinMax(int x, int y, float& mx_min, float& mx_max, float& my_m
 void calibrationCompassAdvanced() {
   float mx_max = -32768, my_max = -32768;
   float mx_min = 32767, my_min = 32767;
-  int sampleCount = 0;
   
-  Serial.println("[CALIB] Advanced compass calibration - 15 seconds rotation");
+  Serial.println(F("Rotating 15s..."));
   
   unsigned long startTime = millis();
   
   // 時計回り 5秒
-  Serial.println("[CALIB] Phase 1/3: Clockwise rotation");
   while (millis() - startTime < 5000) {
     compass_state.compass.read();
     updateMinMax(compass_state.compass.m.x, compass_state.compass.m.y, 
                  mx_min, mx_max, my_min, my_max);
     motor_ctrl.setSpeeds(120, -120);
-    delay(50);
-    sampleCount++;
+    delay(20);
   }
   
   // 反時計回り 5秒
-  Serial.println("[CALIB] Phase 2/3: Counter-clockwise rotation");
   startTime = millis();
   while (millis() - startTime < 5000) {
     compass_state.compass.read();
     updateMinMax(compass_state.compass.m.x, compass_state.compass.m.y,
                  mx_min, mx_max, my_min, my_max);
     motor_ctrl.setSpeeds(-120, 120);
-    delay(50);
-    sampleCount++;
+    delay(20);
   }
   
   // 時計回り 5秒
-  Serial.println("[CALIB] Phase 3/3: Clockwise rotation");
   startTime = millis();
   while (millis() - startTime < 5000) {
     compass_state.compass.read();
     updateMinMax(compass_state.compass.m.x, compass_state.compass.m.y,
                  mx_min, mx_max, my_min, my_max);
     motor_ctrl.setSpeeds(120, -120);
-    delay(50);
-    sampleCount++;
+    delay(20);
   }
   
   motor_ctrl.stop();
@@ -248,24 +223,4 @@ void calibrationCompassAdvanced() {
   compass_state.compass.m_max.x = mx_max;
   compass_state.compass.m_min.y = my_min;
   compass_state.compass.m_max.y = my_max;
-  
-  // 結果表示
-  Serial.print("[CALIB] Total samples: "); 
-  Serial.println(sampleCount);
-  Serial.print("[CALIB] X range: ");
-  Serial.print(mx_min);
-  Serial.print(" to ");
-  Serial.println(mx_max);
-  Serial.print("[CALIB] Y range: ");
-  Serial.print(my_min);
-  Serial.print(" to ");
-  Serial.println(my_max);
-  Serial.print("[CALIB] Hard-iron offset X: "); 
-  Serial.println(compass_state.calib.offset_x);
-  Serial.print("[CALIB] Hard-iron offset Y: "); 
-  Serial.println(compass_state.calib.offset_y);
-  Serial.print("[CALIB] Scale factor X: "); 
-  Serial.println(compass_state.calib.scale_x, 4);
-  Serial.print("[CALIB] Scale factor Y: "); 
-  Serial.println(compass_state.calib.scale_y, 4);
 }

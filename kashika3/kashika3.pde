@@ -22,8 +22,8 @@ void setup() {
   size(1200, 800);
 
   try {
-    port1 = new Serial(this, "COM4", 57600);
-    port1.clear(); port1.bufferUntil(0x0d);
+    port1 = new Serial(this, "COM4", 9600);
+    port1.clear(); port1.bufferUntil(0x0a);
     println("COM4 connected");
   } catch (Exception e) {
     println("COM4 not available");
@@ -31,8 +31,8 @@ void setup() {
   }
 
   try {
-    port2 = new Serial(this, "COM5", 57600);
-    port2.clear(); port2.bufferUntil(0x0d);
+    port2 = new Serial(this, "COM5", 9600);
+    port2.clear(); port2.bufferUntil(0x0a);
     println("COM5 connected");
   } catch (Exception e) {
     println("COM5 not available");
@@ -40,8 +40,8 @@ void setup() {
   }
 
   try {
-    port3 = new Serial(this, "COM6", 57600);
-    port3.clear(); port3.bufferUntil(0x0d);
+    port3 = new Serial(this, "COM6", 9600);
+    port3.clear(); port3.bufferUntil(0x0a);
     println("COM6 connected");
   } catch (Exception e) {
     println("COM6 not available");
@@ -97,6 +97,8 @@ void draw() {
 
 void serialEvent(Serial p) {
   String incoming = p.readStringUntil(LF);
+  println("Received from " + p + ": " + incoming);
+
   if (incoming != null) {
     incoming = trim(incoming);
 

@@ -9,7 +9,7 @@ const char str_check[] PROGMEM = "CHECK_STATIC";
 const char str_approach[] PROGMEM = "APPROACH";
 const char str_turn[] PROGMEM = "TURN_TO_TARGET";
 const char str_wait[] PROGMEM = "WAIT_AFTER_TURN";
-const char str_escape[] PROGMEM = "ESCAPE";
+const char str_escape[] PROGMEM = "TRANSPORT";
 const char str_avoid[] PROGMEM = "AVOID";
 const char str_stop[] PROGMEM = "STOP";
 const char str_move[] PROGMEM = "MOVE";
@@ -81,7 +81,7 @@ void printStatus() {
     }
 
     // 方位（必要なモードのみ）
-    if (robot_state.mode == STATE_TURN_TO_TARGET || robot_state.mode == STATE_ESCAPE) {
+    if (robot_state.mode == STATE_TURN_TO_TARGET || robot_state.mode == STATE_TRANSPORT) {
       Serial.print("HEADING:");
       Serial.println(heading, 0);  // 小数点なしで送信
     }
@@ -245,7 +245,7 @@ void task() {
       motor_ctrl.stop();
       
       if (millis() - robot_state.state_start_time >= 500) {
-        robot_state.mode = STATE_ESCAPE;
+        robot_state.mode = STATE_TRANSPORT;
         pi_ctrl.reset();
       }
       break;
@@ -253,7 +253,7 @@ void task() {
     // ========================================
     // 運搬状態（方位制御しながら前進）
     // ========================================
-    case STATE_ESCAPE: {
+    case STATE_TRANSPORT: {
       // 黒線検知 → 回避
       if (color_sensor.current_color == COLOR_BLACK) {
         robot_state.mode = STATE_AVOID;
@@ -283,8 +283,8 @@ void task() {
         control_u = 0;
       }
       
-      int left = MOTOR_ESCAPE + control_u * 0.3;
-      int right = MOTOR_ESCAPE - control_u * 0.3;
+      int left = MOTOR_TRANSPORT + control_u * 0.3;
+      int right = MOTOR_TRANSPORT - control_u * 0.3;
       
       left = constrain(left, -200, 200);
       right = constrain(right, -200, 200);

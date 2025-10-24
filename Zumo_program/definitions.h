@@ -24,7 +24,7 @@
 #define STATE_APPROACH          3
 #define STATE_TURN_TO_TARGET    4
 #define STATE_WAIT_AFTER_TURN   5
-#define STATE_ESCAPE            6
+#define STATE_TRANSPORT            6
 #define STATE_AVOID             7
 #define STATE_STOP              8
 #define STATE_MOVE              9
@@ -36,7 +36,7 @@
 // ============================================
 #define MOTOR_ROTATE     140
 #define MOTOR_FORWARD    140
-#define MOTOR_ESCAPE     140
+#define MOTOR_TRANSPORT     140
 #define MOTOR_REVERSE    -140
 #define MOTOR_AVOID_ROT  140
 #define MOTOR_MOVE       140

@@ -14,6 +14,12 @@ int motorL3 = 0, motorR3 = 0;
 String myString1 = null, myString2 = null, myString3 = null;
 int LF = 10;
 
+//加速度用変数
+float ax1 = 0, ay1 = 0, az1 = 0;
+float ax2 = 0, ay2 = 0, az2 = 0;
+float ax3 = 0, ay3 = 0, az3 = 0;
+
+
 // 表示座標用定数
 int tBaseY = 40;
 int tDistY = 30;
@@ -64,8 +70,9 @@ void draw() {
   text("Color: " + color1, 20, tBaseY + tDistY * 2);
   text("Heading: " + heading1 + "°", 20, tBaseY + tDistY * 3);
   text("Motor[L:" + motorL1 + " R:" + motorR1 + "]", 20, tBaseY + tDistY * 4);
+  text("Accel[X:" + ax1 + " Y:" + ay1 + " Z:" + az1 + "]", 20, tBaseY + tDistY * 5);
   if (myString1 != null) {
-    text("Raw: " + myString1, 20, tBaseY + tDistY * 5);
+    text("Raw: " + myString1, 20, tBaseY + tDistY * 6);
   }
 
   // Zumo2（右上）
@@ -77,8 +84,9 @@ void draw() {
   text("Color: " + color2, width/2 + 20, tBaseY + tDistY * 2);
   text("Heading: " + heading2 + "°", width/2 + 20, tBaseY + tDistY * 3);
   text("Motor[L:" + motorL2 + " R:" + motorR2 + "]", width/2 + 20, tBaseY + tDistY * 4);
+  text("Accel[X:" + ax1 + " Y:" + ay1 + " Z:" + az1 + "]",width/2 + 20, tBaseY + tDistY * 5);
   if (myString2 != null) {
-    text("Raw: " + myString2, width/2 + 20, tBaseY + tDistY * 5);
+    text("Raw: " + myString2, width/2 + 20, tBaseY + tDistY * 6);
   }
 
   // Zumo3（左下）
@@ -90,8 +98,9 @@ void draw() {
   text("Color: " + color3, 20, height/2 + tBaseY + tDistY * 2);
   text("Heading: " + heading3 + "°", 20, height/2 + tBaseY + tDistY * 3);
   text("Motor[L:" + motorL3 + " R:" + motorR3 + "]", 20, height/2 + tBaseY + tDistY * 4);
+  text("Accel[X:" + ax1 + " Y:" + ay1 + " Z:" + az1 + "]", height/2 + 20, tBaseY + tDistY * 5);
   if (myString3 != null) {
-    text("Raw: " + myString3, 20, height/2 + tBaseY + tDistY * 5);
+    text("Raw: " + myString3, 20, height/2 + tBaseY + tDistY * 6);
   }
 }
 
@@ -138,6 +147,20 @@ void serialEvent(Serial p) {
           motorL2 = ml; motorR2 = mr;
         } else if (p == port3) {
           motorL3 = ml; motorR3 = mr;
+        }
+      }
+    } else if (incoming.startsWith("ACCEL:")) {
+      String[] parts = split(incoming.substring(6), ',');
+      if (parts.length == 3) {
+        float ax = float(parts[0]);
+        float ay = float(parts[1]);
+        float az = float(parts[2]);
+        if (p == port1) {
+          ax1 = ax; ay1 = ay; az1 = az;
+        } else if (p == port2) {
+          ax2 = ax; ay2 = ay; az2 = az;
+        } else if (p == port3) {
+          ax3 = ax; ay3 = ay; az3 = az;
         }
       }
     } else {

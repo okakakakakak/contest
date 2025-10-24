@@ -14,15 +14,20 @@ const char str_avoid[] PROGMEM = "AVOID";
 const char str_stop[] PROGMEM = "STOP";
 const char str_move[] PROGMEM = "MOVE";
 const char str_climb[] PROGMEM = "CLIMB";
+const char str_check_zone[] PROGMEM = "CHECK_ZONE";
+const char str_deposit[] PROGMEM = "DEPOSIT";
 const char str_unknown[] PROGMEM = "UNKNOWN";
 
 const char* const mode_names[] PROGMEM = {
   str_init, str_search, str_check, str_approach, str_turn,
-  str_wait, str_escape, str_avoid, str_stop, str_move, str_climb
+  str_wait, str_escape, str_avoid, str_stop, str_move,
+  str_climb,
+  str_check_zone, 
+  str_deposit
 };
 
 void printModeName(byte mode) {
-  if (mode < 11) {
+  if (mode < 13) {
     char buffer[20];
     strcpy_P(buffer, (char*)pgm_read_word(&(mode_names[mode])));
     Serial.print(buffer);
@@ -51,30 +56,62 @@ void printModeChange() {
 void printStatus() {
   static unsigned long lastPrintTime = 0;
   unsigned long currentTime = millis();
-  
+
   if (currentTime - lastPrintTime >= 500) {
     int dist = ultrasonic.getDistance();
-    
-    Serial.print(F("["));
+    int colorCode = color_sensor.current_color;
+    float heading = compass_state.current_heading;
+    int motorL = motor_ctrl.left_speed;
+    int motorR = motor_ctrl.right_speed;
+
+    // モード名
+    Serial.print("MODE:");
     printModeName(robot_state.mode);
-    Serial.print(F("] D:"));
-    Serial.print(dist);
-    
-    // 色情報（簡略化）
-    Serial.print(F(" C:"));
-    Serial.print(color_sensor.current_color);
-    
-    // 方位情報（必要な状態のみ）
-    if (robot_state.mode == STATE_TURN_TO_TARGET || 
-        robot_state.mode == STATE_ESCAPE) {
-      Serial.print(F(" H:"));
-      Serial.print(compass_state.current_heading, 0);
-    }
-    
     Serial.println();
+
+    // 距離
+    Serial.print("DIST:");
+    Serial.println(dist);
+
+    // 色（数値 → 文字列変換）
+    Serial.print("COLOR:");
+    switch (colorCode) {
+      case COLOR_WHITE: Serial.println("WHITE"); break;
+      case COLOR_RED:   Serial.println("RED");   break;
+      case COLOR_BLACK: Serial.println("BLACK"); break;
+      case COLOR_BLUE:  Serial.println("BLUE");  break;
+      default:          Serial.println("OTHER"); break;
+    }
+
+    // 方位（必要なモードのみ）
+    if (robot_state.mode == STATE_TURN_TO_TARGET || robot_state.mode == STATE_ESCAPE) {
+      Serial.print("HEADING:");
+      Serial.println(heading, 0);  // 小数点なしで送信
+    }
+
+    // モーター速度
+    Serial.print("MOTOR:");
+    Serial.print(motorL);
+    Serial.print(",");
+    Serial.println(motorR);
+
+    // 加速度センサ（X, Y, Z）
+    compass_state.compass.readAcc();  // LSM303から加速度取得
+    int ax = compass_state.compass.a.x;
+    int ay = compass_state.compass.a.y;
+    int az = compass_state.compass.a.z;
+
+    Serial.print("ACCEL:");
+    Serial.print(ax);
+    Serial.print(",");
+    Serial.print(ay);
+    Serial.print(",");
+    Serial.println(az);
+
     lastPrintTime = currentTime;
   }
 }
+
 
 // ============================================
 // メインタスク（状態遷移）
@@ -132,6 +169,15 @@ void task() {
     case STATE_MOVE:
       motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE);
       
+      // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
+      if (isSlopeDetected()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_CLIMB;
+        robot_state.state_start_time = millis();
+        pi_ctrl.reset();
+        break;
+      }
+
       if (color_sensor.current_color == COLOR_BLACK) {
         robot_state.mode = STATE_AVOID;
         robot_state.state_start_time = millis();
@@ -146,13 +192,11 @@ void task() {
         robot_state.search_start_time = millis();
         robot_state.search_rotation_count = 0;
         robot_state.object_detected_in_search = false;
-      } else if (isSlopeDetected()) {
-        motor_ctrl.stop();
-        robot_state.mode = STATE_CLIMB;
-        robot_state.state_start_time = millis();
-        pi_ctrl.reset();
       }
+      break;
 
+    case STATE_CLIMB: // 💡 NEW: 坂道登坂モード
+      runClimbMode(); // 💡 climb_control.ino の関数を呼び出し
       break;
 
     case STATE_CHECK_STATIC:
@@ -235,13 +279,33 @@ void task() {
       }
       break;
 
+    // ========================================
+    // 運搬状態（方位制御しながら前進）
+    // ========================================
     case STATE_ESCAPE: {
+      // 黒線検知 → 回避
       if (color_sensor.current_color == COLOR_BLACK) {
         robot_state.mode = STATE_AVOID;
         robot_state.state_start_time = millis();
         break;
       }
       
+      // 白→赤 or 白→青 の検知 → 自陣到着
+      if (color_sensor.previous_color == COLOR_WHITE && 
+          (color_sensor.current_color == COLOR_RED || 
+           color_sensor.current_color == COLOR_BLUE)) {
+        motor_ctrl.stop();
+        Serial.print(F("Home zone reached: "));
+        Serial.println(color_sensor.current_color == COLOR_RED ? F("RED") : F("BLUE"));
+        robot_state.mode = STATE_DEPOSIT;
+        robot_state.state_start_time = millis();
+        robot_state.cups_delivered++;
+        Serial.print(F("Cups delivered: "));
+        Serial.println(robot_state.cups_delivered);
+        break;
+      }
+      
+      // PI制御で方位を維持しながら前進
       float control_u = turnTo(TARGET_HEADING);
       
       if (abs(control_u) < 3) {
@@ -254,13 +318,40 @@ void task() {
       left = constrain(left, -200, 200);
       right = constrain(right, -200, 200);
       motor_ctrl.setSpeeds(left, right);
-      
-      if (color_sensor.previous_color == COLOR_BLACK && color_sensor.current_color == COLOR_WHITE) {
-        motor_ctrl.stop();
-        robot_state.mode = STATE_STOP;
-      }
       break;
     }
+
+    // ========================================
+    // 預け入れ動作状態（1秒後退 + 半回転）
+    // ========================================
+    case STATE_DEPOSIT:
+      if (millis() - robot_state.state_start_time < 1000) {
+        // 1秒間後退
+        motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
+      } else if (millis() - robot_state.state_start_time < 2500) {
+        // 1.5秒間半回転（180度）
+        motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
+      } else {
+        // 完了したら探索モードへ
+        motor_ctrl.stop();
+        robot_state.mode = STATE_SEARCH;
+        robot_state.search_start_time = millis();
+        robot_state.search_rotation_count = 0;
+        robot_state.object_detected_in_search = false;
+        Serial.println(F("Deposit complete, searching for next cup"));
+      }
+      break;
+
+    // ========================================
+    // ゾーン確認状態（削除 - 不要になった）
+    // ========================================
+    case STATE_CHECK_ZONE:
+      // この状態は使用しないが、念のため探索に戻す
+      robot_state.mode = STATE_SEARCH;
+      robot_state.search_start_time = millis();
+      robot_state.search_rotation_count = 0;
+      robot_state.object_detected_in_search = false;
+      break;
 
     case STATE_AVOID:
       if (millis() - robot_state.state_start_time < 300) {
@@ -280,52 +371,8 @@ void task() {
       }
       break;
 
-    case STATE_CLIMB:
-      // 目標方位(TARGET_HEADING)に向かってPI制御を行う
-      float control_u = turnTo(TARGET_HEADING);
-
-      // isSlopeDetected() が false を返したら水平に戻ったと判断
-        if (!isSlopeDetected()) {
-        motor_ctrl.stop();
-        
-        // 宝の検知条件：距離が30cm未満
-        if (dist > 0 && dist < 30) { 
-          // 登頂成功後、宝を検知 → STATE_APPROACH へ
-          robot_state.mode = STATE_APPROACH;
-          robot_state.state_start_time = millis(); // 状態開始時間をリセット
-        } else {
-          // 登頂成功したが宝は検知せず → STATE_STOP へ
-          robot_state.mode = STATE_STOP;
-          robot_state.search_start_time = millis();
-          robot_state.search_rotation_count = 0;
-          robot_state.object_detected_in_search = false;
-        }
-        pi_ctrl.reset();
-        break;
-      }
-      
-      
-      // 制御入力が小さい場合は中央値を0にする（モーターの遊び対策）
-      if (abs(control_u) < 5) {
-        control_u = 0;
-      }
-      
-      // 左右のスピードを計算（基本速度 + 制御入力）
-      const int CLIMB_BASE_SPEED = 180; // 坂を登るための高い基本速度
-      
-      int left = CLIMB_BASE_SPEED + control_u * 0.5;
-      int right = CLIMB_BASE_SPEED - control_u * 0.5;
-      
-      // スピードを制限（オーバーフロー・モーター保護）
-      left = constrain(left, -255, 255);
-      right = constrain(right, -255, 255);
-      motor_ctrl.setSpeeds(left, right);
-      
-      break;
-
     case STATE_STOP:
       motor_ctrl.stop();
       break;
   }
 }
-

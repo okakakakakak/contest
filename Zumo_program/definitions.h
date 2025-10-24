@@ -28,6 +28,8 @@
 #define STATE_AVOID             7
 #define STATE_STOP              8
 #define STATE_MOVE              9
+#define STATE_CHECK_ZONE        10
+#define STATE_DEPOSIT           11
 
 // ============================================
 // モーター速度定数
@@ -131,18 +133,19 @@ struct RobotState {
   bool object_detected_in_search;
   unsigned long time_now;
   unsigned long time_prev;
+  byte cups_delivered;  // 運搬したカップの数
   
   RobotState() : 
     mode(STATE_INIT), previous_mode(255),  // -1の代わりに255
     state_start_time(0), search_start_time(0),
     search_rotation_count(0), object_detected_in_search(false),
-    time_now(0), time_prev(0) {}
+    time_now(0), time_prev(0), cups_delivered(0) {}
   
   void updateTime() {
     time_prev = time_now;
     time_now = millis();
   }
-};
+};;
 
 // ============================================
 // モーター制御構造体

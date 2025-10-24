@@ -17,11 +17,20 @@ void ColorSensorState::getRGB(float& r, float& g, float& b) {
 }
 
 byte ColorSensorState::identifyColor(int r, int g, int b) {
-  if (200 < r && 200 < g && 200 < b) return COLOR_WHITE;
-  else if (r < 50 && g < 50 && b < 50) return COLOR_BLACK;
-  else if (100 < r && g < 50 && b < 50) return COLOR_WHITE;
-  else if (r < 50 && g < 50 && 70 < b) return COLOR_WHITE;
-  else return COLOR_OTHER;
+  // 白（全ての値が高い）
+  if (r > 240 && g > 240 && b > 240) return COLOR_WHITE;
+  
+  // 黒（全ての値が低い）
+  if (r < 10 && g < 10 && b < 10) return COLOR_BLACK;
+  
+  // 赤（Rが高く、G・Bが低い）
+  if (r > 100 && g < 80 && b < 80) return COLOR_RED;
+  
+  // 青（Bが高く、R・Gが低い）
+  if (r < 80 && g < 80 && b > 100) return COLOR_BLUE;
+  
+  // その他
+  return COLOR_OTHER;
 }
 
 void ColorSensorState::calibrate() {

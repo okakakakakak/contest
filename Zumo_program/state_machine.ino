@@ -13,15 +13,18 @@ const char str_escape[] PROGMEM = "ESCAPE";
 const char str_avoid[] PROGMEM = "AVOID";
 const char str_stop[] PROGMEM = "STOP";
 const char str_move[] PROGMEM = "MOVE";
+const char str_check_zone[] PROGMEM = "CHECK_ZONE";
+const char str_deposit[] PROGMEM = "DEPOSIT";
 const char str_unknown[] PROGMEM = "UNKNOWN";
 
 const char* const mode_names[] PROGMEM = {
   str_init, str_search, str_check, str_approach, str_turn,
-  str_wait, str_escape, str_avoid, str_stop, str_move
+  str_wait, str_escape, str_avoid, str_stop, str_move,
+  str_check_zone, str_deposit
 };
 
 void printModeName(byte mode) {
-  if (mode < 10) {
+  if (mode < 12) {
     char buffer[20];
     strcpy_P(buffer, (char*)pgm_read_word(&(mode_names[mode])));
     Serial.print(buffer);
@@ -59,9 +62,27 @@ void printStatus() {
     Serial.print(F("] D:"));
     Serial.print(dist);
     
-    // 色情報（簡略化）
+    // 色情報（詳細版：ESCAPE, DEPOSIT時）
     Serial.print(F(" C:"));
-    Serial.print(color_sensor.current_color);
+    if (robot_state.mode == STATE_ESCAPE || robot_state.mode == STATE_DEPOSIT) {
+      // 色名で表示
+      switch(color_sensor.current_color) {
+        case COLOR_WHITE: Serial.print(F("WHT")); break;
+        case COLOR_BLACK: Serial.print(F("BLK")); break;
+        case COLOR_RED:   Serial.print(F("RED")); break;
+        case COLOR_BLUE:  Serial.print(F("BLU")); break;
+        default:          Serial.print(F("OTH")); break;
+      }
+    } else {
+      // 数値で表示
+      Serial.print(color_sensor.current_color);
+    }
+    
+    // 運搬数表示
+    if (robot_state.cups_delivered > 0) {
+      Serial.print(F(" Cups:"));
+      Serial.print(robot_state.cups_delivered);
+    }
     
     // 方位情報（必要な状態のみ）
     if (robot_state.mode == STATE_TURN_TO_TARGET || 
@@ -228,13 +249,33 @@ void task() {
       }
       break;
 
+    // ========================================
+    // 運搬状態（方位制御しながら前進）
+    // ========================================
     case STATE_ESCAPE: {
+      // 黒線検知 → 回避
       if (color_sensor.current_color == COLOR_BLACK) {
         robot_state.mode = STATE_AVOID;
         robot_state.state_start_time = millis();
         break;
       }
       
+      // 白→赤 or 白→青 の検知 → 自陣到着
+      if (color_sensor.previous_color == COLOR_WHITE && 
+          (color_sensor.current_color == COLOR_RED || 
+           color_sensor.current_color == COLOR_BLUE)) {
+        motor_ctrl.stop();
+        Serial.print(F("Home zone reached: "));
+        Serial.println(color_sensor.current_color == COLOR_RED ? F("RED") : F("BLUE"));
+        robot_state.mode = STATE_DEPOSIT;
+        robot_state.state_start_time = millis();
+        robot_state.cups_delivered++;
+        Serial.print(F("Cups delivered: "));
+        Serial.println(robot_state.cups_delivered);
+        break;
+      }
+      
+      // PI制御で方位を維持しながら前進
       float control_u = turnTo(TARGET_HEADING);
       
       if (abs(control_u) < 3) {
@@ -247,13 +288,40 @@ void task() {
       left = constrain(left, -200, 200);
       right = constrain(right, -200, 200);
       motor_ctrl.setSpeeds(left, right);
-      
-      if (color_sensor.previous_color == COLOR_BLACK && color_sensor.current_color == COLOR_WHITE) {
-        motor_ctrl.stop();
-        robot_state.mode = STATE_STOP;
-      }
       break;
     }
+
+    // ========================================
+    // 預け入れ動作状態（1秒後退 + 半回転）
+    // ========================================
+    case STATE_DEPOSIT:
+      if (millis() - robot_state.state_start_time < 1000) {
+        // 1秒間後退
+        motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
+      } else if (millis() - robot_state.state_start_time < 2500) {
+        // 1.5秒間半回転（180度）
+        motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
+      } else {
+        // 完了したら探索モードへ
+        motor_ctrl.stop();
+        robot_state.mode = STATE_SEARCH;
+        robot_state.search_start_time = millis();
+        robot_state.search_rotation_count = 0;
+        robot_state.object_detected_in_search = false;
+        Serial.println(F("Deposit complete, searching for next cup"));
+      }
+      break;
+
+    // ========================================
+    // ゾーン確認状態（削除 - 不要になった）
+    // ========================================
+    case STATE_CHECK_ZONE:
+      // この状態は使用しないが、念のため探索に戻す
+      robot_state.mode = STATE_SEARCH;
+      robot_state.search_start_time = millis();
+      robot_state.search_rotation_count = 0;
+      robot_state.object_detected_in_search = false;
+      break;
 
     case STATE_AVOID:
       if (millis() - robot_state.state_start_time < 300) {

@@ -92,10 +92,6 @@ void printStatus() {
     Serial.print(",");
     Serial.println(motorR);
 
-    //追加：加速度
-    Serial.print("ACCEL:");
-
-
     lastPrintTime = currentTime;
   }
 }

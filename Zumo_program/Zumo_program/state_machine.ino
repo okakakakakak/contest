@@ -95,6 +95,19 @@ void printStatus() {
     Serial.print(",");
     Serial.println(motorR);
 
+    // 加速度センサ（X, Y, Z）
+    compass_state.compass.readAcc();  // LSM303から加速度取得
+    int ax = compass_state.compass.a.x;
+    int ay = compass_state.compass.a.y;
+    int az = compass_state.compass.a.z;
+
+    Serial.print("ACCEL:");
+    Serial.print(ax);
+    Serial.print(",");
+    Serial.print(ay);
+    Serial.print(",");
+    Serial.println(az);
+
     lastPrintTime = currentTime;
   }
 }

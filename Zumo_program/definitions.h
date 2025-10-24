@@ -30,6 +30,7 @@
 #define STATE_MOVE              9
 #define STATE_CHECK_ZONE        10
 #define STATE_DEPOSIT           11
+#define STATE_CLIMB             12
 
 // ============================================
 // モーター速度定数
@@ -41,6 +42,13 @@
 #define MOTOR_AVOID_ROT  140
 #define MOTOR_MOVE       140
 #define MOTOR_STOP       0
+
+// ============================================
+// 加速度センサー定数
+// ============================================
+#define ACCEL_READ_INTERVAL  50  // 加速度センサーの計測間隔 (ms)
+#define SLOPE_THRESHOLD      150  // 傾斜判定の閾値（経験値）
+#define ACCEL_Z_OFFSET       -150 // Z軸のオフセット（水平な場所で計測）
 
 // ============================================
 // PI制御パラメータ
@@ -193,5 +201,6 @@ void printStatus();
 void task();
 float turnTo(float target_heading);
 void calibrationCompassAdvanced();
+
 
 #endif

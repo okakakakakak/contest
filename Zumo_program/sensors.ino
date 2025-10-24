@@ -166,29 +166,6 @@ void CompassState::updateHeading(float magnetic_declination) {
 }
 
 // ============================================
-// 加速度センサーによる傾斜検知
-// ============================================
-bool isSlopeDetected() {
-  static unsigned long lastAccelRead = 0;
-  static int current_accel_z = 0;
-  
-  // 頻繁に読み取ると動作に影響するため、一定間隔で読み取る
-  if (millis() - lastAccelRead > ACCEL_READ_INTERVAL) {
-    compass_state.compass.readAcc();
-    // Z軸の値を読み取り、オフセットを適用
-    current_accel_z = compass_state.compass.a.z + ACCEL_Z_OFFSET;
-    lastAccelRead = millis();
-  }
-  
-  // Z軸の値が閾値を超えていれば坂道と判定（坂を登る場合、Z軸の値が増加/減少する）
-  // 坂道の向きによって符号が変わるため、絶対値で判定します
-  if (abs(current_accel_z) > SLOPE_THRESHOLD) {
-    return true;
-  }
-  return false;
-}    
-    
-// ============================================
 // コンパスキャリブレーション（簡略版）
 // ============================================
 static void updateMinMax(int x, int y, float& mx_min, float& mx_max, float& my_min, float& my_max) {
@@ -255,5 +232,4 @@ void calibrationCompassAdvanced() {
   compass_state.compass.m_max.x = mx_max;
   compass_state.compass.m_min.y = my_min;
   compass_state.compass.m_max.y = my_max;
-
 }

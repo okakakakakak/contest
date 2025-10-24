@@ -10,11 +10,12 @@ CompassState compass_state;
 UltrasonicSensor ultrasonic(2, 4);
 RobotState robot_state;
 PIController pi_ctrl;
+int ACCEL_Z_OFFSET = 0;
 
 // ============================================
 // 定数定義
 // ============================================
-const float TARGET_HEADING = 177.0;
+const float TARGET_HEADING = 210.0;
 const float MAGNETIC_DECLINATION = -7.0;
 const char ROBOT_NAME[] PROGMEM = "Zumo1";  // ← ロボット名（必要に応じて変更）
 
@@ -75,6 +76,14 @@ void setup() {
   waitForButtonPress();
   calibrationCompassAdvanced();
   Serial.println(F("Done!"));
+
+  // 💡 NEW: Z軸オフセットキャリブレーション
+  Serial.println(F("--- Accel Z Calib ---"));
+  Serial.println(F("Place robot on a level surface. Press button."));
+  waitForButtonPress();
+  calibrateAccelZOffset();
+  Serial.println(F("Done! Z-Offset: "));
+  Serial.println(ACCEL_Z_OFFSET);
   
   // カラーキャリブレーション
   Serial.println(F("--- Color Calib ---"));

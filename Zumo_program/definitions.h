@@ -28,9 +28,9 @@
 #define STATE_AVOID             7
 #define STATE_STOP              8
 #define STATE_MOVE              9
-#define STATE_CHECK_ZONE        10
-#define STATE_DEPOSIT           11
-#define STATE_CLIMB             12
+#define STATE_CLIMB             10 // 💡 NEW: 坂道登坂モードを追加
+#define STATE_CHECK_ZONE        11 // STATE_CLIMBの挿入で1つずれる
+#define STATE_DEPOSIT           12 // STATE_CLIMBの挿入で1つずれる
 
 // ============================================
 // モーター速度定数
@@ -44,11 +44,11 @@
 #define MOTOR_STOP       0
 
 // ============================================
-// 加速度センサー定数
+// 加速度センサー定数 💡 NEW
 // ============================================
-#define ACCEL_READ_INTERVAL  50  // 加速度センサーの計測間隔 (ms)
-#define SLOPE_THRESHOLD      150  // 傾斜判定の閾値（経験値）
-#define ACCEL_Z_OFFSET       -150 // Z軸のオフセット（水平な場所で計測）
+#define ACCEL_READ_INTERVAL     50   // 加速度センサーの計測間隔 (ms)
+#define SLOPE_THRESHOLD         150  // 傾斜判定の閾値（経験値）
+//#define ACCEL_Z_OFFSET          -150 // Z軸のオフセット（水平な場所で計測）
 
 // ============================================
 // PI制御パラメータ
@@ -186,6 +186,7 @@ extern CompassState compass_state;
 extern UltrasonicSensor ultrasonic;
 extern RobotState robot_state;
 extern PIController pi_ctrl;
+extern int ACCEL_Z_OFFSET; // 💡 NEW: オフセットをグローバル変数として宣言
 
 // ============================================
 // 定数（PROGMEM使用）
@@ -201,6 +202,8 @@ void printStatus();
 void task();
 float turnTo(float target_heading);
 void calibrationCompassAdvanced();
-
+bool isSlopeDetected(); // 💡 NEW
+void runClimbMode();    // 💡 NEW
+void calibrateAccelZOffset();
 
 #endif

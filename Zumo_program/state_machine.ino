@@ -294,8 +294,8 @@ void task() {
           robot_state.mode = STATE_APPROACH;
           robot_state.state_start_time = millis(); // 状態開始時間をリセット
         } else {
-          // 登頂成功したが宝は検知せず → STATE_SEARCH へ戻る
-          robot_state.mode = STATE_SEARCH;
+          // 登頂成功したが宝は検知せず → STATE_STOP へ
+          robot_state.mode = STATE_STOP;
           robot_state.search_start_time = millis();
           robot_state.search_rotation_count = 0;
           robot_state.object_detected_in_search = false;
@@ -328,3 +328,4 @@ void task() {
       break;
   }
 }
+

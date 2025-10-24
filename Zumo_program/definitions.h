@@ -30,17 +30,15 @@
 #define STATE_MOVE              9
 
 // ============================================
-// モーター速度定数構造体
+// モーター速度定数
 // ============================================
-struct MotorSpeeds {
-  static const int ROTATE     = 140;
-  static const int FORWARD    = 140;
-  static const int ESCAPE     = 140;
-  static const int REVERSE    = -140;
-  static const int AVOID_ROT  = 140;
-  static const int MOVE       = 140;
-  static const int STOP       = 0;
-};
+#define MOTOR_ROTATE     140
+#define MOTOR_FORWARD    140
+#define MOTOR_ESCAPE     140
+#define MOTOR_REVERSE    -140
+#define MOTOR_AVOID_ROT  140
+#define MOTOR_MOVE       140
+#define MOTOR_STOP       0
 
 // ============================================
 // PI制御パラメータ
@@ -50,13 +48,13 @@ struct PIController {
   float ti_inv;
   float sum_e;
   
-  PIController() : kp(4.0), ti_inv(4.0/1000.0), sum_e(0) {}
+  PIController() : kp(4.0), ti_inv(0.004), sum_e(0) {}
   
   void reset() { sum_e = 0; }
 };
 
 // ============================================
-// 地磁気センサー補正用構造体
+// 地磁気センサー補正用構造体（簡略化）
 // ============================================
 struct MagnetometerCalibration {
   float offset_x, offset_y;
@@ -66,19 +64,19 @@ struct MagnetometerCalibration {
 };
 
 // ============================================
-// コンパス状態構造体
+// コンパス状態構造体（バッファサイズ削減）
 // ============================================
-#define HEADING_FILTER_SIZE 5
+#define HEADING_FILTER_SIZE 3  // 5→3に削減
 
 struct CompassState {
   LSM303 compass;
   MagnetometerCalibration calib;
   float heading_buffer[HEADING_FILTER_SIZE];
-  int heading_index;
+  byte heading_index;  // int→byteに変更
   float current_heading;
   
   CompassState() : heading_index(0), current_heading(0) {
-    for (int i = 0; i < HEADING_FILTER_SIZE; i++) {
+    for (byte i = 0; i < HEADING_FILTER_SIZE; i++) {
       heading_buffer[i] = 0;
     }
   }
@@ -91,10 +89,10 @@ struct CompassState {
 // ============================================
 struct ColorSensorState {
   Adafruit_TCS34725 tcs;
-  unsigned int r_min, g_min, b_min;
-  unsigned int r_max, g_max, b_max;
-  int current_color;
-  int previous_color;
+  uint16_t r_min, g_min, b_min;  // unsigned int→uint16_tに明示
+  uint16_t r_max, g_max, b_max;
+  byte current_color;   // int→byteに変更
+  byte previous_color;  // int→byteに変更
   
   ColorSensorState() : 
     tcs(TCS34725_INTEGRATIONTIME_2_4MS, TCS34725_GAIN_60X),
@@ -104,17 +102,17 @@ struct ColorSensorState {
   
   void getRGB(float& r, float& g, float& b);
   void calibrate();
-  int identifyColor(int r, int g, int b);
+  byte identifyColor(int r, int g, int b);
 };
 
 // ============================================
 // 距離センサー構造体
 // ============================================
 struct UltrasonicSensor {
-  int trig_pin;
-  int echo_pin;
+  byte trig_pin;  // int→byteに変更
+  byte echo_pin;  // int→byteに変更
   
-  UltrasonicSensor(int trig, int echo) : trig_pin(trig), echo_pin(echo) {}
+  UltrasonicSensor(byte trig, byte echo) : trig_pin(trig), echo_pin(echo) {}
   
   void init();
   int getDistance();
@@ -122,20 +120,20 @@ struct UltrasonicSensor {
 };
 
 // ============================================
-// ロボット状態構造体
+// ロボット状態構造体（最適化）
 // ============================================
 struct RobotState {
-  int mode;
-  int previous_mode;
+  byte mode;           // int→byteに変更
+  byte previous_mode;  // int→byteに変更
   unsigned long state_start_time;
   unsigned long search_start_time;
-  int search_rotation_count;
+  byte search_rotation_count;  // int→byteに変更
   bool object_detected_in_search;
   unsigned long time_now;
   unsigned long time_prev;
   
   RobotState() : 
-    mode(STATE_INIT), previous_mode(-1),
+    mode(STATE_INIT), previous_mode(255),  // -1の代わりに255
     state_start_time(0), search_start_time(0),
     search_rotation_count(0), object_detected_in_search(false),
     time_now(0), time_prev(0) {}
@@ -179,7 +177,7 @@ extern RobotState robot_state;
 extern PIController pi_ctrl;
 
 // ============================================
-// 定数
+// 定数（PROGMEM使用）
 // ============================================
 extern const float TARGET_HEADING;
 extern const float MAGNETIC_DECLINATION;
@@ -187,7 +185,6 @@ extern const float MAGNETIC_DECLINATION;
 // ============================================
 // 関数プロトタイプ
 // ============================================
-const char* getModeName(int mode);
 void printModeChange();
 void printStatus();
 void task();

@@ -50,30 +50,49 @@ void printModeChange() {
 void printStatus() {
   static unsigned long lastPrintTime = 0;
   unsigned long currentTime = millis();
-  
+
   if (currentTime - lastPrintTime >= 500) {
     int dist = ultrasonic.getDistance();
-    
-    Serial.print(F("["));
+    int colorCode = color_sensor.current_color;
+    float heading = compass_state.current_heading;
+    int motorL = motor_ctrl.left_speed;
+    int motorR = motor_ctrl.right_speed;
+
+    // モード名
+    Serial.print("MODE:");
     printModeName(robot_state.mode);
-    Serial.print(F("] D:"));
-    Serial.print(dist);
-    
-    // 色情報（簡略化）
-    Serial.print(F(" C:"));
-    Serial.print(color_sensor.current_color);
-    
-    // 方位情報（必要な状態のみ）
-    if (robot_state.mode == STATE_TURN_TO_TARGET || 
-        robot_state.mode == STATE_ESCAPE) {
-      Serial.print(F(" H:"));
-      Serial.print(compass_state.current_heading, 0);
-    }
-    
     Serial.println();
+
+    // 距離
+    Serial.print("DIST:");
+    Serial.println(dist);
+
+    // 色（数値 → 文字列変換）
+    Serial.print("COLOR:");
+    switch (colorCode) {
+      case COLOR_WHITE: Serial.println("WHITE"); break;
+      case COLOR_RED:   Serial.println("RED");   break;
+      case COLOR_BLACK: Serial.println("BLACK"); break;
+      case COLOR_BLUE:  Serial.println("BLUE");  break;
+      default:          Serial.println("OTHER"); break;
+    }
+
+    // 方位（必要なモードのみ）
+    if (robot_state.mode == STATE_TURN_TO_TARGET || robot_state.mode == STATE_ESCAPE) {
+      Serial.print("HEADING:");
+      Serial.println(heading, 0);  // 小数点なしで送信
+    }
+
+    // モーター速度
+    Serial.print("MOTOR:");
+    Serial.print(motorL);
+    Serial.print(",");
+    Serial.println(motorR);
+
     lastPrintTime = currentTime;
   }
 }
+
 
 // ============================================
 // メインタスク（状態遷移）

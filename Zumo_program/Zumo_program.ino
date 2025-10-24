@@ -40,8 +40,9 @@ void waitForButtonPress() {
 // セットアップ
 // ============================================
 void setup() {
-  Serial.begin(57600);  // 115200→57600に下げてメモリ節約
+  Serial.begin(9600);  // 9600じゃないと速すぎて認識しないかも
   delay(1500);
+
   
   Serial.println(F("\n=== Zumo v3.1 ==="));
   
@@ -89,6 +90,9 @@ void setup() {
   robot_state.time_now = robot_state.time_prev = millis();
   
   Serial.println(F("Running..."));
+
+  Serial.println("NAME:AAAA");//追加　機体名
+
 }
 
 // ============================================

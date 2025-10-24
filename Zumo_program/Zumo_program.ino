@@ -16,6 +16,7 @@ PIController pi_ctrl;
 // ============================================
 const float TARGET_HEADING = 177.0;
 const float MAGNETIC_DECLINATION = -7.0;
+const char ROBOT_NAME[] PROGMEM = "Zumo1";  // ← ロボット名（必要に応じて変更）
 
 // ============================================
 // ボタン待機関数（簡略版）

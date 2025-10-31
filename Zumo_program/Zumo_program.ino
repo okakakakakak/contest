@@ -26,7 +26,6 @@ CompassState compass_state;             // 地磁気センサー・加速度セ�
 UltrasonicSensor ultrasonic(2, 4);      // 超音波センサー（トリガー:2, エコー:4）
 RobotState robot_state;                 // ロボットの状態
 PIController pi_ctrl;                   // PI制御
-int ACCEL_Z_OFFSET = 0;                 // 💡 NEW: 加速度Z軸オフセット（キャリブレーションで設定）
 
 // ============================================
 // 定数定義
@@ -123,13 +122,15 @@ void setup() {
   // ========================================
   // 💡 NEW: Z軸オフセットキャリブレーション
   // ========================================
+  /*
   Serial.println(F("--- Accel Z Calib ---"));
   Serial.println(F("Place robot on a level surface. Press button."));
   waitForButtonPress();  // ボタンが押されるまで待機
   calibrateAccelZOffset();  // Z軸オフセットを計算
   Serial.println(F("Done! Z-Offset: "));
   Serial.println(ACCEL_Z_OFFSET);  // オフセット値を表示
-  
+  */
+
   // ========================================
   // カラーキャリブレーション
   // ========================================
@@ -185,6 +186,20 @@ void loop() {
     // 最後に読み取った時刻を更新
     lastColorRead = millis();
   }
+
+  // ========================================
+  // デバッグ：加速度Z軸の値を表示
+  // ========================================
+  /*
+  static unsigned long lastAccelDebug = 0;
+  if (millis() - lastAccelDebug > 500) {
+    compass_state.compass.readAcc();
+    int accel_z = compass_state.compass.a.z + ACCEL_Z_OFFSET;
+    Serial.print(F("ACCEL_Z:"));
+    Serial.println(accel_z);
+    lastAccelDebug = millis();
+  }
+  */
 
   // ========================================
   // タスクを実行（状態遷移）

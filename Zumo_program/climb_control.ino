@@ -1,42 +1,144 @@
 #include "definitions.h"
 
 // ============================================
-// 加速度センサーによる傾斜検知
+// 加速度センサーによる傾斜検知（Pitch角計算版）
 // ============================================
 /**
  * 坂道（傾斜）を検知する関数
- * 加速度センサーのZ軸の値を読み取り、閾値と比較して傾斜を判定する
+ * 加速度センサーの値からPitch角を計算し、閾値と比較して傾斜を判定する
+ * 連続して閾値を超えた場合のみ坂道と判定（誤検知防止）
  * 
  * @return true: 坂道を検知した / false: 平坦な地面
  */
 bool isSlopeDetected() {
-  // LSM303の加速度計はZumo_program.inoでcompass_state.compass.enableDefault()により初期化済み
-
-  // 前回の加速度読み取り時刻を記録（頻繁な読み取りを避けるため）
   static unsigned long lastAccelRead = 0;
-  // 現在のZ軸加速度値を保持
-  static int current_accel_z = 0;
+  static float current_pitch = 0.0;
+  static int slope_detect_count = 0;  // 連続検知カウンター
   
   // 頻繁に読み取ると動作に影響するため、一定間隔(ACCEL_READ_INTERVAL)で読み取る
   if (millis() - lastAccelRead > ACCEL_READ_INTERVAL) {
     // 加速度センサーから最新の値を読み取る
     compass_state.compass.readAcc();
     
-    // Z軸の値を読み取り、オフセットを適用
-    // 坂を登る場合、Z軸の値が変化するため、その変化を捉える
-    // オフセットを加えることで、水平時に0になるように補正
-    current_accel_z = compass_state.compass.a.z + ACCEL_Z_OFFSET;
+    // 各軸の加速度を取得（生の値）
+    float a_x = compass_state.compass.a.x;
+    float a_y = compass_state.compass.a.y;
+    float a_z = compass_state.compass.a.z;
+    
+    // 加速度ベクトルのノルム（大きさ）を計算
+    float norm = sqrt(a_x * a_x + a_y * a_y + a_z * a_z);
+    
+    // ゼロ除算を防ぐ
+    if (norm < 100) {
+      norm = 100;  // 最小値を設定
+    }
+    
+    // 加速度を正規化（重力加速度 = 1 の単位系にする）
+    float a_x_normalized = a_x / norm;
+    
+    // Pitch角を計算（ラジアン）
+    // Pitch = arcsin(-a_x_normalized)
+    // -1 ≤ a_x_normalized ≤ 1 の範囲に制限
+    a_x_normalized = constrain(a_x_normalized, -1.0, 1.0);
+    float pitch_rad = asin(-a_x_normalized);
+    
+    // 度に変換
+    current_pitch = pitch_rad * 180.0 / PI;
     
     // 最後に読み取った時刻を更新
     lastAccelRead = millis();
+    
+    // デバッグ出力（500msごと）
+    static unsigned long lastDebug = 0;
+    if (millis() - lastDebug > 500) {
+      Serial.print(F("ACCEL_X:"));
+      Serial.print((int)a_x);
+      Serial.print(F(" ACCEL_Y:"));
+      Serial.print((int)a_y);
+      Serial.print(F(" ACCEL_Z:"));
+      Serial.print((int)a_z);
+      Serial.print(F(" PITCH:"));
+      Serial.println(current_pitch, 1);  // 小数点1桁
+      lastDebug = millis();
+    }
+    
+    // 閾値判定（絶対値で判定 - 上り坂も下り坂も検知）
+    if (abs(current_pitch) > SLOPE_PITCH_THRESHOLD) {
+      slope_detect_count++;  // 検知カウントを増やす
+    } else {
+      slope_detect_count = 0;  // 閾値未満ならリセット
+    }
   }
   
-  // Z軸の値の絶対値が閾値(SLOPE_THRESHOLD)を超えていれば坂道と判定
-  // 正の傾斜(上り坂)でも負の傾斜(下り坂)でも検知できるようabs()を使用
-  if (abs(current_accel_z) > SLOPE_THRESHOLD) {
+  // 連続して3回以上検知した場合のみ坂道と判定
+  if (slope_detect_count >= 3) {
     return true;  // 坂道を検知
   }
   return false;  // 平坦な地面
+}
+
+// ============================================
+// 登頂判定（傾斜がなくなったかチェック）
+// ============================================
+/**
+ * 坂道を登りきった（平地に戻った）かを判定する関数
+ * 坂道モード中のみ使用
+ * 
+ * @return true: 平地に戻った / false: まだ坂道
+ */
+bool hasReachedTop() {
+  static unsigned long lastAccelRead = 0;
+  static float current_pitch = 0.0;
+  static int flat_detect_count = 0;  // 平地連続検知カウンター
+  
+  // 一定間隔で読み取る
+  if (millis() - lastAccelRead > ACCEL_READ_INTERVAL) {
+    // 加速度センサーから最新の値を読み取る
+    compass_state.compass.readAcc();
+    
+    // 各軸の加速度を取得
+    float a_x = compass_state.compass.a.x;
+    float a_y = compass_state.compass.a.y;
+    float a_z = compass_state.compass.a.z;
+    
+    // ノルムを計算
+    float norm = sqrt(a_x * a_x + a_y * a_y + a_z * a_z);
+    if (norm < 100) {
+      norm = 100;
+    }
+    
+    // 正規化
+    float a_x_normalized = a_x / norm;
+    a_x_normalized = constrain(a_x_normalized, -1.0, 1.0);
+    
+    // Pitch角を計算
+    float pitch_rad = asin(-a_x_normalized);
+    current_pitch = pitch_rad * 180.0 / PI;
+    
+    lastAccelRead = millis();
+    
+    // デバッグ出力
+    static unsigned long lastDebug = 0;
+    if (millis() - lastDebug > 500) {
+      Serial.print(F("CLIMBING - PITCH:"));
+      Serial.println(current_pitch, 1);
+      lastDebug = millis();
+    }
+    
+    // 平地判定（閾値の半分以下で平地とみなす）
+    if (abs(current_pitch) < SLOPE_PITCH_THRESHOLD / 2.0) {
+      flat_detect_count++;
+    } else {
+      flat_detect_count = 0;
+    }
+  }
+  
+  // 連続して3回以上平地を検知したら登頂完了
+  if (flat_detect_count >= 3) {
+    flat_detect_count = 0;  // カウンターをリセット
+    return true;
+  }
+  return false;
 }
 
 // ============================================
@@ -66,8 +168,10 @@ void runClimbMode() {
   // ========================================
   // 💡 終了条件2: 傾斜がなくなった（山を登頂した）場合
   // ========================================
-  if (!isSlopeDetected()) {
+  if (hasReachedTop()) {  // isSlopeDetected() → hasReachedTop() に変更
     motor_ctrl.stop();  // モーターを停止
+    
+    Serial.println(F("Reached top!"));
     
     // 宝の検知条件：距離が30cm未満
     if (dist > 0 && dist < 30) { 
@@ -121,34 +225,14 @@ void runClimbMode() {
 }
 
 // ============================================
-// Z軸オフセット・キャリブレーション
+// 加速度センサーキャリブレーション（使用しない - 削除可能）
 // ============================================
 /**
- * 加速度センサーのZ軸オフセットをキャリブレーションする
- * 水平な場所に置いた状態で実行し、Z軸が0になるように補正値を計算する
- * この関数はsetup()で一度だけ実行される
+ * この関数は使用しません。
+ * Pitch角計算では生の加速度値を使用するため、
+ * オフセットキャリブレーションは不要です。
  */
 void calibrateAccelZOffset() {
-  // 読み取り回数（多いほど精度が上がる）
-  const int NUM_READINGS = 100;
-  
-  // Z軸の値の合計を計算するための変数
-  long sum_z = 0;
-  
-  // 100回Z軸の値を読み取り、合計を計算
-  for (int i = 0; i < NUM_READINGS; i++) {
-    compass_state.compass.readAcc();  // 加速度を読み取る
-    sum_z += compass_state.compass.a.z;  // Z軸の値を加算
-    delay(5);  // 読み取り間隔（センサーの安定化のため）
-  }
-  
-  // オフセット（水平な時の読み取り値）を計算
-  // 理想値 0 からの差分をオフセットとする
-  // ( sum_z / NUM_READINGS ) が水平時の平均読み取り値
-  // マイナスを付けることで、補正時に0になるようにする
-  ACCEL_Z_OFFSET = -(sum_z / NUM_READINGS); 
-  
-  // 💡 ACCEL_Z_OFFSET は、climb_control.inoのisSlopeDetected()で以下のように使用されます。
-  // current_accel_z = compass_state.compass.a.z + ACCEL_Z_OFFSET;
-  // -> 水平な時、current_accel_z は約 0 になる
+  // 何もしない（削除してもOK）
+  Serial.println(F("Accel calibration skipped (not needed for pitch calculation)"));
 }

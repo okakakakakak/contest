@@ -11,7 +11,7 @@
  * 
  * 【状態遷移の概要】
  * INIT → SEARCH → CHECK_STATIC → APPROACH → TURN_TO_TARGET → 
- * WAIT_AFTER_TURN → TRANSPORT → DEPOSIT → SEARCH...
+ * WAIT_AFTER_TURN → ESCAPE → DEPOSIT → SEARCH...
  * 
  * ※黒線検知時はAVOID、坂道検知時はCLIMBに遷移
  */
@@ -28,7 +28,7 @@ const char str_check[] PROGMEM = "CHECK_STATIC";
 const char str_approach[] PROGMEM = "APPROACH";
 const char str_turn[] PROGMEM = "TURN_TO_TARGET";
 const char str_wait[] PROGMEM = "WAIT_AFTER_TURN";
-const char str_escape[] PROGMEM = "TRANSPORT";
+const char str_escape[] PROGMEM = "ESCAPE";
 const char str_avoid[] PROGMEM = "AVOID";
 const char str_stop[] PROGMEM = "STOP";
 const char str_move[] PROGMEM = "MOVE";
@@ -137,7 +137,7 @@ void printStatus() {
     // 方位を表示（必要なモードのみ）
     // ========================================
     // 旋回中や脱出中のみ方位を表示（通信量削減）
-    if (robot_state.mode == STATE_TURN_TO_TARGET || robot_state.mode == STATE_TRANSPORT) {
+    if (robot_state.mode == STATE_TURN_TO_TARGET || robot_state.mode == STATE_ESCAPE) {
       Serial.print("HEADING:");
       Serial.println(heading, 0);  // 小数点なしで送信
     }
@@ -149,23 +149,6 @@ void printStatus() {
     Serial.print(motorL);
     Serial.print(",");
     Serial.println(motorR);
-
-    // ========================================
-    // 加速度を表示
-    // ========================================
-    // 加速度センサ（X, Y, Z）
-    compass_state.compass.readAcc();  // LSM303から加速度取得
-    int ax = compass_state.compass.a.x;
-    int ay = compass_state.compass.a.y;
-    int az = compass_state.compass.a.z;
-
-    Serial.print("ACCEL:");
-    Serial.print(ax);
-    Serial.print(",");
-    Serial.print(ay);
-    Serial.print(",");
-    Serial.println(az);
-    
 
     // 最後に表示した時刻を更新
     lastPrintTime = currentTime;
@@ -277,11 +260,13 @@ void task() {
         break;
       }
 
-      // 黒線を検知したら回避モードへ
-      if (color_sensor.current_color == COLOR_BLACK) {
-        robot_state.mode = STATE_AVOID;
-        robot_state.state_start_time = millis();
-      } 
+      // 黒線・赤色・青色を検知したら回避モードへ
+      if (color_sensor.current_color == COLOR_BLACK ||
+      color_sensor.current_color == COLOR_RED ||
+      color_sensor.current_color == COLOR_BLUE) {
+      robot_state.mode = STATE_AVOID;
+      robot_state.state_start_time = millis();
+      }
       // 30cm未満の物体を検知したら静止確認へ
       else if (dist > 0 && dist < 30) {
         motor_ctrl.stop();
@@ -306,7 +291,7 @@ void task() {
       // climb_control.ino の関数を呼び出し
       runClimbMode();
       break;
-
+      
     // ========================================
     // STATE_CHECK_STATIC: 静止物体確認状態
     // ========================================
@@ -328,13 +313,15 @@ void task() {
     // STATE_APPROACH: 接近状態
     // ========================================
     case STATE_APPROACH:
-      // 黒線を検知したら回避モードへ
-      if (color_sensor.current_color == COLOR_BLACK) {
-        robot_state.mode = STATE_AVOID;
-        robot_state.state_start_time = millis();
-        break;
+    // 黒線・赤色・青色を検知したら回避モードへ
+    if (color_sensor.current_color == COLOR_BLACK ||
+      color_sensor.current_color == COLOR_RED ||
+      color_sensor.current_color == COLOR_BLUE) {
+      robot_state.mode = STATE_AVOID;
+      robot_state.state_start_time = millis();
+      break;
       }
-      
+
       // 前進
       motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
       
@@ -415,15 +402,15 @@ void task() {
       
       // 500ms待機後、脱出モードへ
       if (millis() - robot_state.state_start_time >= 500) {
-        robot_state.mode = STATE_TRANSPORT;
+        robot_state.mode = STATE_ESCAPE;
         pi_ctrl.reset();
       }
       break;
 
     // ========================================
-    // STATE_TRANSPORT: 脱出状態（物体を運搬中）
+    // STATE_ESCAPE: 脱出状態（物体を運搬中）
     // ========================================
-    case STATE_TRANSPORT: {
+    case STATE_ESCAPE: {
       // 黒線検知 → 回避
       if (color_sensor.current_color == COLOR_BLACK) {
         robot_state.mode = STATE_AVOID;
@@ -462,9 +449,9 @@ void task() {
       }
       
       // 左右のモーター速度を計算
-      // 基本速度(MOTOR_TRANSPORT) + 制御入力 * 0.3
-      int left = MOTOR_TRANSPORT + control_u * 0.3;
-      int right = MOTOR_TRANSPORT - control_u * 0.3;
+      // 基本速度(MOTOR_ESCAPE) + 制御入力 * 0.3
+      int left = MOTOR_ESCAPE + control_u * 0.3;
+      int right = MOTOR_ESCAPE - control_u * 0.3;
       
       // 速度を制限
       left = constrain(left, -200, 200);
@@ -474,27 +461,30 @@ void task() {
       break;
     }
 
-    // ========================================
-    // STATE_DEPOSIT: 預け入れ動作状態（1秒後退 + 半回転）
-    // ========================================
-    case STATE_DEPOSIT:
-      if (millis() - robot_state.state_start_time < 1000) {
-        // 最初の1秒間：後退
-        motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
-      } else if (millis() - robot_state.state_start_time < 2500) {
-        // 次の1.5秒間：半回転（180度）
-        // 左モーター正転、右モーター逆転で時計回り
-        motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
-      } else {
-        // 完了したら探索モードへ
-        motor_ctrl.stop();
-        robot_state.mode = STATE_SEARCH;
-        robot_state.search_start_time = millis();
-        robot_state.search_rotation_count = 0;
-        robot_state.object_detected_in_search = false;
-        Serial.println(F("Deposit complete, searching for next cup"));
-      }
-      break;
+// ========================================
+// STATE_DEPOSIT: 預け入れ動作状態（1秒後退 + 半回転 + 3秒前進）
+// ========================================
+case STATE_DEPOSIT:
+  if (millis() - robot_state.state_start_time < 1000) {
+    // 最初の1秒間：後退
+    motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
+  } else if (millis() - robot_state.state_start_time < 2500) {
+    // 次の1.5秒間：半回転（180度）
+    // 左モーター正転、右モーター逆転で時計回り
+    motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
+  } else if (millis() - robot_state.state_start_time < 5500) {
+    // 次の3秒間：前進
+    motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
+  } else {
+    // 完了したら探索モードへ
+    motor_ctrl.stop();
+    robot_state.mode = STATE_SEARCH;
+    robot_state.search_start_time = millis();
+    robot_state.search_rotation_count = 0;
+    robot_state.object_detected_in_search = false;
+    Serial.println(F("Deposit complete, searching for next cup"));
+  }
+  break;
 
     // ========================================
     // STATE_CHECK_ZONE: ゾーン確認状態（削除 - 不要になった）
@@ -507,38 +497,32 @@ void task() {
       robot_state.object_detected_in_search = false;
       break;
 
-    // ========================================
-    // STATE_AVOID: 回避状態（黒線を避ける）
-    // ========================================
-    case STATE_AVOID:
-      if (millis() - robot_state.state_start_time < 300) {
-        // 最初の300ms：後退
-        motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
-      } else if (millis() - robot_state.state_start_time < 700) {
-        // 次の400ms：反時計回りに回転
-        // 左モーター逆転、右モーター正転
-        motor_ctrl.setSpeeds(-MOTOR_AVOID_ROT, MOTOR_AVOID_ROT);
-      } else {
-        // 回避完了後の遷移先を決定
-        // 距離が5cm未満 → 旋回モード（物体が近い）
-        // それ以外 → 探索モード
-        robot_state.mode = (dist < 5 ? STATE_TURN_TO_TARGET : STATE_SEARCH);
-        
-        // 探索モードへ遷移する場合
-        if (robot_state.mode == STATE_SEARCH) {
-          robot_state.search_start_time = millis();
-          robot_state.search_rotation_count = 0;
-          robot_state.object_detected_in_search = false;
-        } 
-        // 旋回モードへ遷移する場合
-        else {
-          robot_state.state_start_time = millis();
-        }
-        
-        // PI制御をリセット
-        pi_ctrl.reset();
-      }
-      break;
+// ========================================
+// STATE_AVOID: 回避状態（黒線を避ける）
+// ========================================
+case STATE_AVOID:
+  if (millis() - robot_state.state_start_time < 1000) {
+    // 最初の1000ms：後退
+    motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
+  } else if (millis() - robot_state.state_start_time < 2500) {
+    // 次の2500ms：反時計回りに回転
+    // 左モーター逆転、右モーター正転
+    motor_ctrl.setSpeeds(-MOTOR_AVOID_ROT, MOTOR_AVOID_ROT);
+  } else if (millis() - robot_state.state_start_time < 4000) {
+    // 次の2000ms（2秒）：前進
+    motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
+  } else {
+    // 回避完了後、探索モードへ遷移
+    motor_ctrl.stop();
+    robot_state.mode = STATE_SEARCH;
+    robot_state.search_start_time = millis();
+    robot_state.search_rotation_count = 0;
+    robot_state.object_detected_in_search = false;
+    
+    // PI制御をリセット
+    pi_ctrl.reset();
+  }
+  break;
 
     // ========================================
     // STATE_STOP: 停止状態

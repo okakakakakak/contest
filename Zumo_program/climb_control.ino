@@ -146,7 +146,7 @@ bool hasReachedTop() {
 // ============================================
 /**
  * 坂道を登るモードの制御ロジック
- * PI制御で目標方位を維持しながら、高速で前進する
+ * 一直線に高速で前進する（方位制御は最小限）
  * 終了条件：黒線検知、または傾斜がなくなる（登頂）
  */
 void runClimbMode() {
@@ -168,7 +168,7 @@ void runClimbMode() {
   // ========================================
   // 💡 終了条件2: 傾斜がなくなった（山を登頂した）場合
   // ========================================
-  if (hasReachedTop()) {  // isSlopeDetected() → hasReachedTop() に変更
+  if (hasReachedTop()) {
     motor_ctrl.stop();  // モーターを停止
     
     Serial.println(F("Reached top!"));
@@ -195,32 +195,43 @@ void runClimbMode() {
   }
 
   // ========================================
-  // 登坂継続：目標方位(TARGET_HEADING)に向かってPI制御を行う
+  // 登坂継続：一直線に高速前進
   // ========================================
-  // PI制御による方位維持は motion_control.ino の turnTo() 関数を使用
-  // 制御入力 u が返される（正：左旋回、負：右旋回）
-  float control_u = turnTo(TARGET_HEADING);
-  
-  // 制御入力が小さい場合は中央値を0にする（モーターの遊び対策）
-  // 微小な制御入力では効果がないため、閾値以下は無視
-  if (abs(control_u) < 5) {
-    control_u = 0;
-  }
   
   // 坂を登るための高い基本速度を設定
-  const int CLIMB_BASE_SPEED = 180;
+  const int CLIMB_BASE_SPEED = 160;  // 180 → 200 に増速
   
-  // 左右のスピードを計算（基本速度 + 制御入力）
-  // control_u * 0.5 で制御の影響を調整（大きすぎると不安定になる）
-  int left = CLIMB_BASE_SPEED + control_u * 0.5;   // 左モーター速度
-  int right = CLIMB_BASE_SPEED - control_u * 0.5;  // 右モーター速度
+  // 方法1: PI制御を完全に無効化（推奨）
+  // 左右同じ速度で前進 = 一直線に進む
+  //motor_ctrl.setSpeeds(CLIMB_BASE_SPEED, CLIMB_BASE_SPEED);
   
-  // スピードを制限（オーバーフロー・モーター保護）
-  // -255〜255の範囲に制限
+  // 方法2: PI制御を最小限使用（方位のズレが大きい場合のみ補正）
+  // こちらを使用する場合は上記の motor_ctrl.setSpeeds() をコメントアウト
+  
+  // 現在の方位を取得
+  compass_state.updateHeading(MAGNETIC_DECLINATION);
+  
+  // 目標方位との誤差を計算
+  float heading_error = TARGET_HEADING - compass_state.current_heading;
+  while (heading_error < -180) heading_error += 360;
+  while (heading_error > 180) heading_error -= 360;
+  
+  // 誤差が大きい場合のみ補正（±30度以上のズレ）
+  float control_u = 0;
+  if (abs(heading_error) > 30) {
+    // 比例制御のみ（積分項は使わない）
+    control_u = heading_error * 0.5;  // ゲインを小さくして緩やかに補正
+    control_u = constrain(control_u, -30, 30);  // 補正量を制限
+  }
+  
+  // 左右のスピードを計算
+  int left = CLIMB_BASE_SPEED + control_u;
+  int right = CLIMB_BASE_SPEED - control_u;
+  
+  // スピードを制限
   left = constrain(left, -255, 255);
   right = constrain(right, -255, 255);
   
-  // モーターに速度を設定
   motor_ctrl.setSpeeds(left, right);
 }
 

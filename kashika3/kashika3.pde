@@ -71,8 +71,14 @@ void draw() {
   text("Heading: " + heading1 + "°", 20, tBaseY + tDistY * 3);
   text("Motor[L:" + motorL1 + " R:" + motorR1 + "]", 20, tBaseY + tDistY * 4);
   text("Accel[X:" + ax1 + " Y:" + ay1 + " Z:" + az1 + "]", 20, tBaseY + tDistY * 5);
+  
+  // 姿勢角
+  float roll1 = degrees(atan2(ay1, az1));
+  float pitch1 = degrees(atan2(-ax1, sqrt(ay1*ay1 + az1*az1)));
+  text("Roll: " + nf(roll1, 1, 1) + "°", 20, tBaseY + tDistY * 6);
+  text("Pitch: " + nf(pitch1, 1, 1) + "°", 20, tBaseY + tDistY * 7);
   if (myString1 != null) {
-    text("Raw: " + myString1, 20, tBaseY + tDistY * 6);
+    text("Raw: " + myString1, 20, tBaseY + tDistY * 8);
   }
 
   // Zumo2（右上）
@@ -84,9 +90,14 @@ void draw() {
   text("Color: " + color2, width/2 + 20, tBaseY + tDistY * 2);
   text("Heading: " + heading2 + "°", width/2 + 20, tBaseY + tDistY * 3);
   text("Motor[L:" + motorL2 + " R:" + motorR2 + "]", width/2 + 20, tBaseY + tDistY * 4);
-  text("Accel[X:" + ax1 + " Y:" + ay1 + " Z:" + az1 + "]",width/2 + 20, tBaseY + tDistY * 5);
+  text("Accel[X:" + ax2 + " Y:" + ay2 + " Z:" + az2 + "]",width/2 + 20, tBaseY + tDistY * 5);
+   // 姿勢角
+  float roll2 = degrees(atan2(ay2, az2));
+  float pitch2 = degrees(atan2(-ax2, sqrt(ay2*ay2 + az2*az2)));
+  text("Roll: " + nf(roll2, 1, 1) + "°", width/2 + 20, tBaseY + tDistY * 6);
+  text("Pitch: " + nf(pitch2, 1, 1) + "°", width/2 + 20, tBaseY + tDistY * 7);
   if (myString2 != null) {
-    text("Raw: " + myString2, width/2 + 20, tBaseY + tDistY * 6);
+    text("Raw: " + myString2, width/2 + 20, tBaseY + tDistY * 8);
   }
 
   // Zumo3（左下）
@@ -98,9 +109,14 @@ void draw() {
   text("Color: " + color3, 20, height/2 + tBaseY + tDistY * 2);
   text("Heading: " + heading3 + "°", 20, height/2 + tBaseY + tDistY * 3);
   text("Motor[L:" + motorL3 + " R:" + motorR3 + "]", 20, height/2 + tBaseY + tDistY * 4);
-  text("Accel[X:" + ax1 + " Y:" + ay1 + " Z:" + az1 + "]", + 20, height/2 + tBaseY + tDistY * 5);
+  text("Accel[X:" + ax3 + " Y:" + ay3 + " Z:" + az3 + "]", + 20, height/2 + tBaseY + tDistY * 5);
+   // 姿勢角
+  float roll3 = degrees(atan2(ay3, az3));
+  float pitch3 = degrees(atan2(-ax3, sqrt(ay3*ay3 + az3*az3)));
+  text("Roll: " + nf(roll3, 1, 1) + "°", 20, height/2 + tBaseY + tDistY * 6);
+  text("Pitch: " + nf(pitch3, 1, 1) + "°", 20, height/2 + tBaseY + tDistY * 7);
   if (myString3 != null) {
-    text("Raw: " + myString3, 20, height/2 + tBaseY + tDistY * 6);
+    text("Raw: " + myString3, 20, height/2 + tBaseY + tDistY * 8);
   }
 }
 

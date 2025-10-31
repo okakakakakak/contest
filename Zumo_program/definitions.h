@@ -43,7 +43,7 @@
 #define STATE_APPROACH          3   // 接近状態（物体に近づく）
 #define STATE_TURN_TO_TARGET    4   // 目標方位へ旋回状態
 #define STATE_WAIT_AFTER_TURN   5   // 旋回後の待機状態
-#define STATE_TRANSPORT            6   // 脱出状態（物体を運搬中）
+#define STATE_ESCAPE            6   // 脱出状態（物体を運搬中）
 #define STATE_AVOID             7   // 回避状態（黒線を避ける）
 #define STATE_STOP              8   // 停止状態
 #define STATE_MOVE              9   // 移動状態（前進）
@@ -57,7 +57,7 @@
 // 各状態で使用するモーター速度の基準値
 #define MOTOR_ROTATE     140   // 回転時の速度
 #define MOTOR_FORWARD    140   // 前進時の速度
-#define MOTOR_TRANSPORT     140   // 脱出時の速度
+#define MOTOR_ESCAPE     140   // 脱出時の速度
 #define MOTOR_REVERSE    -140  // 後退時の速度（負の値）
 #define MOTOR_AVOID_ROT  140   // 回避時の回転速度
 #define MOTOR_MOVE       140   // 移動時の速度
@@ -68,9 +68,7 @@
 // ============================================
 // 坂道検知に使用する加速度センサーのパラメータ
 #define ACCEL_READ_INTERVAL     50   // 加速度センサーの計測間隔 (ms)
-#define SLOPE_THRESHOLD         150  // 傾斜判定の閾値（経験値、調整が必要）
-//#define ACCEL_Z_OFFSET          -150 // Z軸のオフセット（水平な場所で計測）
-// ※ACCEL_Z_OFFSETはグローバル変数として実装（キャリブレーションで設定）
+#define SLOPE_PITCH_THRESHOLD   15.0    // 傾斜判定の閾値（Pitch角、度）
 
 // ============================================
 // PI制御パラメータ
@@ -268,7 +266,6 @@ extern CompassState compass_state;       // 地磁気センサー
 extern UltrasonicSensor ultrasonic;      // 超音波センサー
 extern RobotState robot_state;           // ロボット状態
 extern PIController pi_ctrl;             // PI制御
-extern int ACCEL_Z_OFFSET;               // 💡 NEW: オフセットをグローバル変数として宣言
 
 // ============================================
 // 定数（PROGMEM使用）
@@ -287,6 +284,7 @@ void task();                              // メインタスク（状態遷移�
 float turnTo(float target_heading);       // 目標方位に旋回（PI制御）
 void calibrationCompassAdvanced();        // コンパスキャリブレーション
 bool isSlopeDetected();                   // 💡 NEW: 傾斜検知
+bool hasReachedTop();                     // 💡 NEW: 登頂判定
 void runClimbMode();                      // 💡 NEW: 登坂モード実行
 void calibrateAccelZOffset();             // 💡 NEW: Z軸オフセットキャリブレーション
 

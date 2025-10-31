@@ -98,7 +98,7 @@ void draw() {
   text("Color: " + color3, 20, height/2 + tBaseY + tDistY * 2);
   text("Heading: " + heading3 + "°", 20, height/2 + tBaseY + tDistY * 3);
   text("Motor[L:" + motorL3 + " R:" + motorR3 + "]", 20, height/2 + tBaseY + tDistY * 4);
-  text("Accel[X:" + ax1 + " Y:" + ay1 + " Z:" + az1 + "]", height/2 + 20, tBaseY + tDistY * 5);
+  text("Accel[X:" + ax1 + " Y:" + ay1 + " Z:" + az1 + "]", + 20, height/2 + tBaseY + tDistY * 5);
   if (myString3 != null) {
     text("Raw: " + myString3, 20, height/2 + tBaseY + tDistY * 6);
   }

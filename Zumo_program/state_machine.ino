@@ -11,7 +11,7 @@
  * 
  * 【状態遷移の概要】
  * INIT → SEARCH → CHECK_STATIC → APPROACH → TURN_TO_TARGET → 
- * WAIT_AFTER_TURN → ESCAPE → DEPOSIT → SEARCH...
+ * WAIT_AFTER_TURN → TRANSPORT → DEPOSIT → SEARCH...
  * 
  * ※黒線検知時はAVOID、坂道検知時はCLIMBに遷移
  */
@@ -28,7 +28,7 @@ const char str_check[] PROGMEM = "CHECK_STATIC";
 const char str_approach[] PROGMEM = "APPROACH";
 const char str_turn[] PROGMEM = "TURN_TO_TARGET";
 const char str_wait[] PROGMEM = "WAIT_AFTER_TURN";
-const char str_escape[] PROGMEM = "ESCAPE";
+const char str_escape[] PROGMEM = "TRANSPORT";
 const char str_avoid[] PROGMEM = "AVOID";
 const char str_stop[] PROGMEM = "STOP";
 const char str_move[] PROGMEM = "MOVE";
@@ -137,7 +137,7 @@ void printStatus() {
     // 方位を表示（必要なモードのみ）
     // ========================================
     // 旋回中や脱出中のみ方位を表示（通信量削減）
-    if (robot_state.mode == STATE_TURN_TO_TARGET || robot_state.mode == STATE_ESCAPE) {
+    if (robot_state.mode == STATE_TURN_TO_TARGET || robot_state.mode == STATE_TRANSPORT) {
       Serial.print("HEADING:");
       Serial.println(heading, 0);  // 小数点なしで送信
     }
@@ -398,15 +398,15 @@ void task() {
       
       // 500ms待機後、脱出モードへ
       if (millis() - robot_state.state_start_time >= 500) {
-        robot_state.mode = STATE_ESCAPE;
+        robot_state.mode = STATE_TRANSPORT;
         pi_ctrl.reset();
       }
       break;
 
     // ========================================
-    // STATE_ESCAPE: 脱出状態（物体を運搬中）
+    // STATE_TRANSPORT: 脱出状態（物体を運搬中）
     // ========================================
-    case STATE_ESCAPE: {
+    case STATE_TRANSPORT: {
       // 黒線検知 → 回避
       if (color_sensor.current_color == COLOR_BLACK) {
         robot_state.mode = STATE_AVOID;
@@ -445,9 +445,9 @@ void task() {
       }
       
       // 左右のモーター速度を計算
-      // 基本速度(MOTOR_ESCAPE) + 制御入力 * 0.3
-      int left = MOTOR_ESCAPE + control_u * 0.3;
-      int right = MOTOR_ESCAPE - control_u * 0.3;
+      // 基本速度(MOTOR_TRANSPORT) + 制御入力 * 0.3
+      int left = MOTOR_TRANSPORT + control_u * 0.3;
+      int right = MOTOR_TRANSPORT - control_u * 0.3;
       
       // 速度を制限
       left = constrain(left, -200, 200);

@@ -153,6 +153,18 @@ void printStatus() {
     // ========================================
     // 加速度を表示
     // ========================================
+    // 加速度センサ（X, Y, Z）
+    compass_state.compass.readAcc();  // LSM303から加速度取得
+    int ax = compass_state.compass.a.x;
+    int ay = compass_state.compass.a.y;
+    int az = compass_state.compass.a.z;
+
+    Serial.print("ACCEL:");
+    Serial.print(ax);
+    Serial.print(",");
+    Serial.print(ay);
+    Serial.print(",");
+    Serial.println(az);
     
 
     // 最後に表示した時刻を更新

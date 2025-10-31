@@ -150,6 +150,11 @@ void printStatus() {
     Serial.print(",");
     Serial.println(motorR);
 
+    // ========================================
+    // 加速度を表示
+    // ========================================
+    
+
     // 最後に表示した時刻を更新
     lastPrintTime = currentTime;
   }

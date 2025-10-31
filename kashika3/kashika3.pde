@@ -116,7 +116,7 @@ void draw() {
   text("Roll: " + nf(roll3, 1, 1) + "°", 20, height/2 + tBaseY + tDistY * 6);
   text("Pitch: " + nf(pitch3, 1, 1) + "°", 20, height/2 + tBaseY + tDistY * 7);
   if (myString3 != null) {
-    text("Raw: " + myString3, 20, height/2 + tBaseY + tDistY * 6);
+    text("Raw: " + myString3, 20, height/2 + tBaseY + tDistY * 8);
   }
 }
 

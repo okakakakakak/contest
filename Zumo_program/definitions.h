@@ -43,7 +43,7 @@
 #define STATE_APPROACH          3   // 接近状態（物体に近づく）
 #define STATE_TURN_TO_TARGET    4   // 目標方位へ旋回状態
 #define STATE_WAIT_AFTER_TURN   5   // 旋回後の待機状態
-#define STATE_ESCAPE            6   // 脱出状態（物体を運搬中）
+#define STATE_TRANSPORT            6   // 脱出状態（物体を運搬中）
 #define STATE_AVOID             7   // 回避状態（黒線を避ける）
 #define STATE_STOP              8   // 停止状態
 #define STATE_MOVE              9   // 移動状態（前進）
@@ -57,7 +57,7 @@
 // 各状態で使用するモーター速度の基準値
 #define MOTOR_ROTATE     140   // 回転時の速度
 #define MOTOR_FORWARD    140   // 前進時の速度
-#define MOTOR_ESCAPE     140   // 脱出時の速度
+#define MOTOR_TRANSPORT     140   // 脱出時の速度
 #define MOTOR_REVERSE    -140  // 後退時の速度（負の値）
 #define MOTOR_AVOID_ROT  140   // 回避時の回転速度
 #define MOTOR_MOVE       140   // 移動時の速度

@@ -30,7 +30,7 @@ PIController pi_ctrl;                   // PI制御
 // ============================================
 // 定数定義
 // ============================================
-const float TARGET_HEADING = 210.0;       // 目標方位角（度）
+float TARGET_HEADING = 210.0;       // 目標方位角（度）
 const float MAGNETIC_DECLINATION = -7.0;  // 磁気偏角（度、地域によって異なる）
 const char ROBOT_NAME[] PROGMEM = "Zumo1";  // ← ロボット名（必要に応じて変更）
 
@@ -186,6 +186,21 @@ void loop() {
     // 最後に読み取った時刻を更新
     lastColorRead = millis();
   }
+
+  // ========================================
+  // Processingからの受信処理
+  // ========================================
+  if (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'B') {
+      TARGET_HEADING = 210.0 + 180.0;
+      Serial.println(F("Received B → Heading set to 390"));
+    } else if (c == 'R') {
+      TARGET_HEADING = 210.0 + 0.0;
+      Serial.println(F("Received R → Heading set to 210"));
+    }
+  }
+
 
   // ========================================
   // デバッグ：加速度Z軸の値を表示

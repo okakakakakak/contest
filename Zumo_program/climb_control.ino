@@ -246,4 +246,5 @@ void runClimbMode() {
 void calibrateAccelZOffset() {
   // 何もしない（削除してもOK）
   Serial.println(F("Accel calibration skipped (not needed for pitch calculation)"));
+
 }

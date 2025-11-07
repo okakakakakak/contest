@@ -193,10 +193,10 @@ void loop() {
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'B') {
-      target_heading = 210.0 + 180.0;
+      TARGET_HEADING = 210.0 + 180.0;
       Serial.println(F("Received B → Heading set to 390"));
     } else if (c == 'R') {
-      target_heading = 210.0 + 0.0;
+      TARGET_HEADING = 210.0 + 0.0;
       Serial.println(F("Received R → Heading set to 210"));
     }
   }

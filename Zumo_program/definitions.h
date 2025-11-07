@@ -271,7 +271,7 @@ extern PIController pi_ctrl;             // PI制御
 // 定数（PROGMEM使用）
 // ============================================
 // プログラムメモリに格納される定数
-extern const float TARGET_HEADING;        // 目標方位角（度）
+extern  float TARGET_HEADING;        // 目標方位角（度）
 extern const float MAGNETIC_DECLINATION;  // 磁気偏角（度）
 
 // ============================================

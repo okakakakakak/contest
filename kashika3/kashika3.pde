@@ -157,6 +157,11 @@ void mousePressed() {
     } else {
       currentColor = "Red";
     }
+    // Arduinoに1文字だけ送信
+    char signal = currentColor.equals("Red") ? 'R' : 'B';
+    if (port1 != null) port1.write(signal);
+    if (port2 != null) port2.write(signal);
+    if (port3 != null) port3.write(signal);
   }
 }
 

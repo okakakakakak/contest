@@ -63,7 +63,7 @@
 #define MOTOR_AVOID_ROT  140   // 回避時の回転速度
 #define MOTOR_MOVE       140   // 移動時の速度
 #define MOTOR_STOP       0     // 停止（速度0）
-#define MOTOR_TURN       80    // 💡 旋回速度の基本値 (弧を描くための前進成分)
+#define MOTOR_TURN       120    // 💡 旋回速度の基本値 (弧を描くための前進成分)
 
 // ============================================
 // 加速度センサー定数 
@@ -273,7 +273,7 @@ extern PIController pi_ctrl;             // PI制御
 // 定数（PROGMEM使用）
 // ============================================
 // プログラムメモリに格納される定数
-extern const float TARGET_HEADING;        // 目標方位角（度）
+extern float TARGET_HEADING;        // 目標方位角（度）
 extern const float MAGNETIC_DECLINATION;  // 磁気偏角（度）
 
 // ============================================

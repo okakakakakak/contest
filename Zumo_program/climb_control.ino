@@ -142,14 +142,17 @@ bool hasReachedTop() {
 }
 
 // ============================================
-// 坂道登坂モードの実行
+// 坂道登坂モードの実行（加速度ベース姿勢制御版）
 // ============================================
 /**
- * 坂道を登るモードの制御ロジック
- * 一直線に高速で前進する（方位制御は最小限）
- * 終了条件：黒線検知、または傾斜がなくなる（登頂）
+ * 加速度センサーのロール角を使って横方向の傾きを補正しながら登坂
+ * 地磁気センサーに頼らず、加速度センサーのみで姿勢を制御
  */
 void runClimbMode() {
+  static unsigned long lastAccelRead = 0;
+  static float current_roll = 0.0;
+  static float roll_integral = 0.0;  // ロール角の積分項
+  
   // 超音波センサーで前方の距離を計測
   int dist = ultrasonic.getDistance();
   
@@ -157,83 +160,207 @@ void runClimbMode() {
   // 終了条件1: 黒線（坂の頂上やライン）を検出したら停止
   // ========================================
   if (color_sensor.current_color == COLOR_BLACK) {
-    motor_ctrl.stop();  // モーターを停止
-    
-    // STATE_STOPではなくAVOIDモードに遷移（黒線を回避する）
+    motor_ctrl.stop();
     robot_state.mode = STATE_AVOID;
-    robot_state.state_start_time = millis();  // 状態開始時刻を記録
-    return;  // 関数を終了
+    robot_state.state_start_time = millis();
+    roll_integral = 0;  // 積分項をリセット
+    return;
   }
   
   // ========================================
-  // 💡 終了条件2: 傾斜がなくなった（山を登頂した）場合
+  // 終了条件2: 傾斜がなくなった（山を登頂した）場合
   // ========================================
   if (hasReachedTop()) {
-    motor_ctrl.stop();  // モーターを停止
-    
+    motor_ctrl.stop();
     Serial.println(F("Reached top!"));
     
-    // 宝の検知条件：距離が30cm未満
     if (dist > 0 && dist < 30) { 
-      // 登頂成功後、宝を検知 → STATE_CHECK_STATIC を経由して STATE_APPROACH へ
-      // 静止物体かどうかを確認してから接近する
       robot_state.mode = STATE_CHECK_STATIC;
       robot_state.search_rotation_count = 0;
       robot_state.object_detected_in_search = false;
     } else {
-      // 登頂成功したが宝は検知せず → STATE_SEARCH へ戻る
-      // 探索モードで宝を探す
       robot_state.mode = STATE_SEARCH;
       robot_state.search_start_time = millis();
       robot_state.search_rotation_count = 0;
       robot_state.object_detected_in_search = false;
     }
     
-    // PI制御の積分項をリセット
-    pi_ctrl.reset();
-    return;  // 関数を終了
+    roll_integral = 0;  // 積分項をリセット
+    return;
   }
 
   // ========================================
-  // 登坂継続：一直線に高速前進
+  // 登坂継続：ロール角に基づく姿勢制御
   // ========================================
   
-  // 坂を登るための高い基本速度を設定
-  const int CLIMB_BASE_SPEED = 160;  // 180 → 200 に増速
+  // 坂を登るための基本速度
+  const int CLIMB_BASE_SPEED = 130;
   
-  // 方法1: PI制御を完全に無効化（推奨）
+  // ----------------------------------------
+  // 方法1: 直進（姿勢制御なし）※コメントアウト
+  // ----------------------------------------
   // 左右同じ速度で前進 = 一直線に進む
-  //motor_ctrl.setSpeeds(CLIMB_BASE_SPEED, CLIMB_BASE_SPEED);
+  // シンプルだが、横方向のズレが蓄積する可能性がある
+  // motor_ctrl.setSpeeds(CLIMB_BASE_SPEED, CLIMB_BASE_SPEED);
+  // return;  // ← 方法1を使う場合は、この行までコメント解除
   
-  // 方法2: PI制御を最小限使用（方位のズレが大きい場合のみ補正）
-  // こちらを使用する場合は上記の motor_ctrl.setSpeeds() をコメントアウト
+  // ----------------------------------------
+  // 方法2: 加速度ベース姿勢制御（現在使用中）
+  // ----------------------------------------
   
-  // 現在の方位を取得
-  compass_state.updateHeading(MAGNETIC_DECLINATION);
-  
-  // 目標方位との誤差を計算
-  float heading_error = TARGET_HEADING - compass_state.current_heading;
-  while (heading_error < -180) heading_error += 360;
-  while (heading_error > 180) heading_error -= 360;
-  
-  // 誤差が大きい場合のみ補正（±30度以上のズレ）
-  float control_u = 0;
-  if (abs(heading_error) > 30) {
-    // 比例制御のみ（積分項は使わない）
-    control_u = heading_error * 0.5;  // ゲインを小さくして緩やかに補正
-    control_u = constrain(control_u, -30, 30);  // 補正量を制限
+  // 一定間隔で加速度を読み取る
+  if (millis() - lastAccelRead > ACCEL_READ_INTERVAL) {
+    // 加速度センサーから最新の値を読み取る
+    compass_state.compass.readAcc();
+    
+    // 各軸の加速度を取得
+    float a_x = compass_state.compass.a.x;
+    float a_y = compass_state.compass.a.y;
+    float a_z = compass_state.compass.a.z;
+    
+    // 加速度ベクトルのノルム（大きさ）を計算
+    float norm = sqrt(a_x * a_x + a_y * a_y + a_z * a_z);
+    
+    // ゼロ除算を防ぐ
+    if (norm < 100) {
+      norm = 100;
+    }
+    
+    // 加速度を正規化
+    float a_y_normalized = a_y / norm;
+    
+    // ロール角を計算（ラジアン）
+    // PDFの式に基づく：Roll = arcsin(a_y_normalized)
+    a_y_normalized = constrain(a_y_normalized, -1.0, 1.0);
+    float roll_rad = asin(a_y_normalized);
+    
+    // 度に変換
+    current_roll = roll_rad * 180.0 / PI;
+    
+    lastAccelRead = millis();
+    
+    // デバッグ出力（500msごと）
+    static unsigned long lastDebug = 0;
+    if (millis() - lastDebug > 500) {
+      Serial.print(F("CLIMB - ROLL:"));
+      Serial.print(current_roll, 1);
+      Serial.print(F(" A_Y:"));
+      Serial.println((int)a_y);
+      lastDebug = millis();
+    }
   }
   
-  // 左右のスピードを計算
+  // ========================================
+  // PI制御によるロール角補正
+  // ========================================
+  
+  // ロール角の目標値は0度（まっすぐ）
+  float roll_error = 0.0 - current_roll;
+  
+  // PI制御のパラメータ
+  const float KP_ROLL = 3.0;      // 比例ゲイン
+  const float KI_ROLL = 0.01;     // 積分ゲイン
+  
+  float control_u;
+  
+  if (abs(roll_error) > 20.0) {
+    // 誤差が大きい場合：比例制御のみ（高速補正）
+    control_u = KP_ROLL * roll_error;
+    roll_integral = 0;  // 積分項をリセット
+  } else {
+    // 誤差が小さい場合：PI制御（精密制御）
+    // 積分項を更新
+    roll_integral += KI_ROLL * roll_error * ACCEL_READ_INTERVAL;
+    
+    // アンチワインドアップ
+    roll_integral = constrain(roll_integral, -30, 30);
+    
+    // 制御入力の計算
+    control_u = KP_ROLL * roll_error + roll_integral;
+  }
+  
+  // 制御入力を制限
+  control_u = constrain(control_u, -80, 80);
+  
+  // 誤差が非常に小さい場合は補正しない（±2度以内）
+  if (abs(roll_error) < 2.0) {
+    control_u = 0;
+  }
+  
+  // ========================================
+  // モーター速度の計算
+  // ========================================
+  // ロール角が正（右に傾いている）→ 左モーターを速くして左に曲がる
+  // ロール角が負（左に傾いている）→ 右モーターを速くして右に曲がる
+  
   int left = CLIMB_BASE_SPEED + control_u;
   int right = CLIMB_BASE_SPEED - control_u;
   
-  // スピードを制限
-  left = constrain(left, -255, 255);
-  right = constrain(right, -255, 255);
+  // スピードを制限（後退しないように0以上に制限）
+  left = constrain(left, 0, 255);
+  right = constrain(right, 0, 255);
   
   motor_ctrl.setSpeeds(left, right);
+  
+  // デバッグ出力（制御量とモーター速度）
+  static unsigned long lastDebug2 = 0;
+  if (millis() - lastDebug2 > 500) {
+    Serial.print(F("CLIMB - ERROR:"));
+    Serial.print(roll_error, 1);
+    Serial.print(F(" U:"));
+    Serial.print(control_u, 1);
+    Serial.print(F(" L:"));
+    Serial.print(left);
+    Serial.print(F(" R:"));
+    Serial.println(right);
+    lastDebug2 = millis();
+  }
 }
+
+// ============================================
+// 別案：方位+ロールのハイブリッド制御（コメントアウト）
+// ============================================
+/**
+ * 地磁気センサーとロール角を組み合わせた制御
+ * 平地では方位を維持、傾斜地ではロール角を優先
+ * 
+ * 使用する場合は、上記のrunClimbMode()をコメントアウトして
+ * この関数のコメントを外してください
+ */
+/*
+void runClimbMode() {
+  // ... 終了条件のコードは同じ ...
+  
+  // 加速度からロール角を計算
+  compass_state.compass.readAcc();
+  float a_y = compass_state.compass.a.y;
+  float a_z = compass_state.compass.a.z;
+  float norm = sqrt(a_y * a_y + a_z * a_z);
+  float roll = atan2(a_y, a_z) * 180.0 / PI;
+  
+  // 地磁気から方位を計算
+  compass_state.updateHeading(MAGNETIC_DECLINATION);
+  static float target_heading = compass_state.current_heading;  // 初回のみ設定
+  float heading_error = target_heading - compass_state.current_heading;
+  while (heading_error < -180) heading_error += 360;
+  while (heading_error > 180) heading_error -= 360;
+  
+  // ロール角の影響度（傾斜が大きいほどロールを重視）
+  float pitch = ...; // Pitch角を計算
+  float roll_weight = constrain(abs(pitch) / 20.0, 0.0, 1.0);  // 0〜1
+  
+  // 制御入力の合成
+  float u_heading = 2.0 * heading_error * (1.0 - roll_weight);
+  float u_roll = 3.0 * roll * roll_weight;
+  float control_u = u_heading + u_roll;
+  
+  control_u = constrain(control_u, -80, 80);
+  
+  int left = CLIMB_BASE_SPEED + control_u;
+  int right = CLIMB_BASE_SPEED - control_u;
+  motor_ctrl.setSpeeds(constrain(left, 0, 255), constrain(right, 0, 255));
+}
+*/
 
 // ============================================
 // 加速度センサーキャリブレーション（使用しない - 削除可能）

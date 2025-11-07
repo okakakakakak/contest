@@ -19,13 +19,23 @@ float ax1 = 0, ay1 = 0, az1 = 0;
 float ax2 = 0, ay2 = 0, az2 = 0;
 float ax3 = 0, ay3 = 0, az3 = 0;
 
-
 // 表示座標用定数
 int tBaseY = 40;
 int tDistY = 30;
 
+// ボタン用変数（位置は setup() で初期化）
+String currentColor = "Red";
+int buttonW = 150;
+int buttonH = 60;
+int buttonX = 0;
+int buttonY = 0;
+
 void setup() {
   size(1200, 800);
+
+  // ボタン位置を右下に設定
+  buttonX = width - buttonW - 20;
+  buttonY = height - buttonH - 20;
 
   try {
     port1 = new Serial(this, "COM4", 9600);
@@ -55,12 +65,17 @@ void setup() {
   }
 
   background(0);
-  fill(100); rect(width/2, 0, width/2, height/2);
-  fill(200); rect(0, height/2, width/2, height/2);
-  fill(150); rect(width/2, height/2, width/2, height/2);
 }
 
 void draw() {
+  // 背景色の表示（右下）
+  if (currentColor.equals("Red")) {
+    fill(255, 100, 100);
+  } else {
+    fill(100, 100, 255);
+  }
+  rect(width/2, height/2, width/2, height/2);
+
   // Zumo1（左上）
   fill(0); rect(0, 0, width/2, height/2);
   fill(255); textSize(40);
@@ -71,8 +86,6 @@ void draw() {
   text("Heading: " + heading1 + "°", 20, tBaseY + tDistY * 3);
   text("Motor[L:" + motorL1 + " R:" + motorR1 + "]", 20, tBaseY + tDistY * 4);
   text("Accel[X:" + ax1 + " Y:" + ay1 + " Z:" + az1 + "]", 20, tBaseY + tDistY * 5);
-  
-  // 姿勢角
   float roll1 = degrees(atan2(ay1, az1));
   float pitch1 = degrees(atan2(-ax1, sqrt(ay1*ay1 + az1*az1)));
   text("Roll: " + nf(roll1, 1, 1) + "°", 20, tBaseY + tDistY * 6);
@@ -90,8 +103,7 @@ void draw() {
   text("Color: " + color2, width/2 + 20, tBaseY + tDistY * 2);
   text("Heading: " + heading2 + "°", width/2 + 20, tBaseY + tDistY * 3);
   text("Motor[L:" + motorL2 + " R:" + motorR2 + "]", width/2 + 20, tBaseY + tDistY * 4);
-  text("Accel[X:" + ax2 + " Y:" + ay2 + " Z:" + az2 + "]",width/2 + 20, tBaseY + tDistY * 5);
-   // 姿勢角
+  text("Accel[X:" + ax2 + " Y:" + ay2 + " Z:" + az2 + "]", width/2 + 20, tBaseY + tDistY * 5);
   float roll2 = degrees(atan2(ay2, az2));
   float pitch2 = degrees(atan2(-ax2, sqrt(ay2*ay2 + az2*az2)));
   text("Roll: " + nf(roll2, 1, 1) + "°", width/2 + 20, tBaseY + tDistY * 6);
@@ -109,14 +121,42 @@ void draw() {
   text("Color: " + color3, 20, height/2 + tBaseY + tDistY * 2);
   text("Heading: " + heading3 + "°", 20, height/2 + tBaseY + tDistY * 3);
   text("Motor[L:" + motorL3 + " R:" + motorR3 + "]", 20, height/2 + tBaseY + tDistY * 4);
-  text("Accel[X:" + ax3 + " Y:" + ay3 + " Z:" + az3 + "]", + 20, height/2 + tBaseY + tDistY * 5);
-   // 姿勢角
+  text("Accel[X:" + ax3 + " Y:" + ay3 + " Z:" + az3 + "]", 20, height/2 + tBaseY + tDistY * 5);
   float roll3 = degrees(atan2(ay3, az3));
   float pitch3 = degrees(atan2(-ax3, sqrt(ay3*ay3 + az3*az3)));
   text("Roll: " + nf(roll3, 1, 1) + "°", 20, height/2 + tBaseY + tDistY * 6);
   text("Pitch: " + nf(pitch3, 1, 1) + "°", 20, height/2 + tBaseY + tDistY * 7);
   if (myString3 != null) {
     text("Raw: " + myString3, 20, height/2 + tBaseY + tDistY * 8);
+  }
+
+  drawButton(); // ボタン描画
+}
+
+void drawButton() {
+  if (currentColor.equals("Red")) {
+    fill(255, 0, 0);
+  } else {
+    fill(0, 0, 255);
+  }
+  rect(buttonX, buttonY, buttonW, buttonH, 10);
+
+  fill(255);
+  textSize(20);
+  textAlign(CENTER, CENTER);
+  text(currentColor, buttonX + buttonW/2, buttonY + buttonH/2);
+  textAlign(LEFT, BASELINE); // 他のテキスト描画に影響しないように戻す
+}
+
+void mousePressed() {
+  if (mouseX > buttonX && mouseX < buttonX + buttonW &&
+      mouseY > buttonY && mouseY < buttonY + buttonH) {
+    // 色を切り替える
+    if (currentColor.equals("Red")) {
+      currentColor = "Blue";
+    } else {
+      currentColor = "Red";
+    }
   }
 }
 

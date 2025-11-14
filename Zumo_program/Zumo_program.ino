@@ -129,10 +129,10 @@ void setup() {
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'B') {
-      TARGET_HEADING = 236.0 - 180.0;
+      TARGET_HEADING = 200.0 - 180;
       Serial.println(F("Received Blue"));
     } else if (c == 'R') {
-      TARGET_HEADING = 236.0 + 0.0;
+      TARGET_HEADING = 200.0 + 0.0;
       Serial.println(F("Received Red"));
     } else {
       Serial.print(F("Unexpected color code: "));

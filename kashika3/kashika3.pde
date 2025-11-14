@@ -243,6 +243,13 @@ void serialEvent(Serial p) {
           ax3 = ax; ay3 = ay; az3 = az;
         }
       }
+    } else if (incoming.equals("REQUEST_COLOR")) {
+      // ✅ Zumoから色リクエストが来たら送信
+      char signal = currentColor.equals("Red") ? 'R' : 'B';
+      if (p == port1) port1.write(signal);
+      else if (p == port2) port2.write(signal);
+      else if (p == port3) port3.write(signal);
+
     } else {
       if (p == port1) myString1 = incoming;
       else if (p == port2) myString2 = incoming;

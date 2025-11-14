@@ -93,6 +93,25 @@ void draw() {
   if (myString1 != null) {
     text("Raw: " + myString1, 20, tBaseY + tDistY * 8);
   }
+  // === Roll / Pitch 可視化（Zumo1） ===
+  pushMatrix();
+  translate(300, 300);  // Zumo1 Roll表示位置（左上）
+  rotate(radians(degrees(atan2(ay1, az1))));
+  fill(200, 255, 200);
+  rectMode(CENTER);
+  rect(0, 0, 100, 20);  // 横長バーでRoll
+  popMatrix();
+  
+  pushMatrix();
+  translate(450, 300);  // Zumo1 Pitch表示位置（左上）
+  rotate(radians(degrees(atan2(-ax1, sqrt(ay1*ay1 + az1*az1)))));
+  fill(200, 200, 255);
+  rectMode(CENTER);
+  rect(0, 0, 20, 100);  // 縦長バーでPitch
+  popMatrix();
+  // ✅ 描画モードを元に戻す
+rectMode(CORNER);
+
 
   // Zumo2（右上）
   fill(0); rect(width/2, 0, width/2, height/2);
@@ -224,6 +243,13 @@ void serialEvent(Serial p) {
           ax3 = ax; ay3 = ay; az3 = az;
         }
       }
+    } else if (incoming.equals("REQUEST_COLOR")) {
+      // ✅ Zumoから色リクエストが来たら送信
+      char signal = currentColor.equals("Red") ? 'R' : 'B';
+      if (p == port1) port1.write(signal);
+      else if (p == port2) port2.write(signal);
+      else if (p == port3) port3.write(signal);
+
     } else {
       if (p == port1) myString1 = incoming;
       else if (p == port2) myString2 = incoming;

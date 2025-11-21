@@ -13,6 +13,7 @@ int motorL2 = 0, motorR2 = 0;
 int motorL3 = 0, motorR3 = 0;
 String myString1 = null, myString2 = null, myString3 = null;
 int LF = 10;
+String goalColor1 = "", goalColor2 = "", goalColor3 = "";
 
 //加速度用変数
 float ax1 = 0, ay1 = 0, az1 = 0;
@@ -82,6 +83,7 @@ void draw() {
   text(name1 + " Mode: " + mode1, 20, tBaseY);
   textSize(30);
   text("Distance: " + dist1 + " cm", 20, tBaseY + tDistY);
+  text("Goal: " + goalColor1, 300, tBaseY + tDistY);
   text("Color: " + color1, 20, tBaseY + tDistY * 2);
   text("Heading: " + heading1 + "°", 20, tBaseY + tDistY * 3);
   text("Motor[L:" + motorL1 + " R:" + motorR1 + "]", 20, tBaseY + tDistY * 4);
@@ -176,11 +178,6 @@ void mousePressed() {
     } else {
       currentColor = "Red";
     }
-    // Arduinoに1文字だけ送信
-    char signal = currentColor.equals("Red") ? 'R' : 'B';
-    if (port1 != null) port1.write(signal);
-    if (port2 != null) port2.write(signal);
-    if (port3 != null) port3.write(signal);
   }
 }
 
@@ -249,6 +246,11 @@ void serialEvent(Serial p) {
       if (p == port1) port1.write(signal);
       else if (p == port2) port2.write(signal);
       else if (p == port3) port3.write(signal);
+    } else if (incoming.startsWith("GOAL_COLOR:")) {
+      String gc = incoming.substring(11);
+      if (p == port1) goalColor1 = gc;
+      else if (p == port2) goalColor2 = gc;
+      else if (p == port3) goalColor3 = gc;
 
     } else {
       if (p == port1) myString1 = incoming;

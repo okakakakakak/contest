@@ -57,8 +57,8 @@
 // ============================================
 // 各状態で使用するモーター速度の基準値
 #define MOTOR_ROTATE     140   // 回転時の速度
-#define MOTOR_FORWARD    140   // 前進時の速度
-#define MOTOR_ESCAPE     140   // 脱出時の速度
+#define MOTOR_FORWARD    240   // 前進時の速度
+#define MOTOR_ESCAPE     240   // 脱出時の速度
 #define MOTOR_REVERSE    -140  // 後退時の速度（負の値）
 #define MOTOR_AVOID_ROT  140   // 回避時の回転速度
 #define MOTOR_MOVE       140   // 移動時の速度

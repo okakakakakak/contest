@@ -89,6 +89,10 @@ bool isSlopeDetected() {
 bool hasReachedTop() {
   static unsigned long lastAccelRead = 0;
   static float current_pitch = 0.0;
+  // らせん登頂
+  static float pitch_buffer[5] = {0};  // 移動平均用バッファ
+  static int buffer_index = 0;
+
   static int flat_detect_count = 0;  // 平地連続検知カウンター
   
   // 一定間隔で読み取る
@@ -126,15 +130,30 @@ bool hasReachedTop() {
     }
     
     // 平地判定（閾値の半分以下で平地とみなす）
-    if (abs(current_pitch) < SLOPE_PITCH_THRESHOLD / 2.0) {
-      flat_detect_count++;
+    /*if (abs(current_pitch) < SLOPE_PITCH_THRESHOLD / 2.0) {
+      flat_detect_count++;*/
+    // らせん登頂
+    // Pitch角をバッファに保存
+    pitch_buffer[buffer_index] = current_pitch;
+    buffer_index = (buffer_index + 1) % 5;
+
+    // 移動平均を計算
+    float pitch_avg = 0;
+    for (int i = 0; i < 5; i++) {
+      pitch_avg += pitch_buffer[i];
+    }
+    pitch_avg /= 5.0;
+
+    // 平地判定（平均値で判定）
+    if (abs(pitch_avg) < SLOPE_PITCH_THRESHOLD / 2.0) {
+      flat_detect_count++; //ここまでらせん登頂変更
     } else {
       flat_detect_count = 0;
     }
   }
   
   // 連続して3回以上平地を検知したら登頂完了
-  if (flat_detect_count >= 3) {
+  if (flat_detect_count >= 3) { 
     flat_detect_count = 0;  // カウンターをリセット
     return true;
   }
@@ -204,7 +223,9 @@ void runClimbMode() {
   // ========================================
   
   // 坂を登るための基本速度
-  const int CLIMB_BASE_SPEED = 130;
+  const int CLIMB_BASE_SPEED = 170;
+  // らせん登頂用
+  const int SPIRAL_OFFSET = 60;  // らせんの強さ（旋回半径の調整）大で急旋回、小で緩やか
   
   // ----------------------------------------
   // 方法1: 直進（姿勢制御なし）※コメントアウト
@@ -303,8 +324,12 @@ void runClimbMode() {
   // ロール角が正（右に傾いている）→ 左モーターを速くして左に曲がる
   // ロール角が負（左に傾いている）→ 右モーターを速くして右に曲がる
   
-  int left = CLIMB_BASE_SPEED + control_u;
-  int right = CLIMB_BASE_SPEED - control_u;
+  //int left = CLIMB_BASE_SPEED + control_u;
+  //int right = CLIMB_BASE_SPEED - control_u;
+  //らせん登頂用(左カーブ)
+  int left = CLIMB_BASE_SPEED - SPIRAL_OFFSET + control_u;
+  int right = CLIMB_BASE_SPEED + SPIRAL_OFFSET - control_u;
+
   
   // スピードを制限（後退しないように0以上に制限）
   left = constrain(left, 0, 255);
@@ -325,62 +350,4 @@ void runClimbMode() {
     Serial.println(right);
     lastDebug2 = millis();
   }
-}
-
-// ============================================
-// 別案：方位+ロールのハイブリッド制御（コメントアウト）
-// ============================================
-/**
- * 地磁気センサーとロール角を組み合わせた制御
- * 平地では方位を維持、傾斜地ではロール角を優先
- * 
- * 使用する場合は、上記のrunClimbMode()をコメントアウトして
- * この関数のコメントを外してください
- */
-/*
-void runClimbMode() {
-  // ... 終了条件のコードは同じ ...
-  
-  // 加速度からロール角を計算
-  compass_state.compass.readAcc();
-  float a_y = compass_state.compass.a.y;
-  float a_z = compass_state.compass.a.z;
-  float norm = sqrt(a_y * a_y + a_z * a_z);
-  float roll = atan2(a_y, a_z) * 180.0 / PI;
-  
-  // 地磁気から方位を計算
-  compass_state.updateHeading(MAGNETIC_DECLINATION);
-  static float target_heading = compass_state.current_heading;  // 初回のみ設定
-  float heading_error = target_heading - compass_state.current_heading;
-  while (heading_error < -180) heading_error += 360;
-  while (heading_error > 180) heading_error -= 360;
-  
-  // ロール角の影響度（傾斜が大きいほどロールを重視）
-  float pitch = ...; // Pitch角を計算
-  float roll_weight = constrain(abs(pitch) / 20.0, 0.0, 1.0);  // 0〜1
-  
-  // 制御入力の合成
-  float u_heading = 2.0 * heading_error * (1.0 - roll_weight);
-  float u_roll = 3.0 * roll * roll_weight;
-  float control_u = u_heading + u_roll;
-  
-  control_u = constrain(control_u, -80, 80);
-  
-  int left = CLIMB_BASE_SPEED + control_u;
-  int right = CLIMB_BASE_SPEED - control_u;
-  motor_ctrl.setSpeeds(constrain(left, 0, 255), constrain(right, 0, 255));
-}
-*/
-
-// ============================================
-// 加速度センサーキャリブレーション（使用しない - 削除可能）
-// ============================================
-/**
- * この関数は使用しません。
- * Pitch角計算では生の加速度値を使用するため、
- * オフセットキャリブレーションは不要です。
- */
-void calibrateAccelZOffset() {
-  // 何もしない（削除してもOK）
-  Serial.println(F("Accel calibration skipped (not needed for pitch calculation)"));
 }

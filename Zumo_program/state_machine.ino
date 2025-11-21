@@ -23,7 +23,6 @@
 // ============================================
 // 文字列をプログラムメモリに格納（RAMを節約）
 const char str_init[] PROGMEM = "INIT";
-const char str_direction[] PROGMEM = "DIRECTION";
 const char str_search[] PROGMEM = "SEARCH";
 const char str_check[] PROGMEM = "CHECK_STATIC";
 const char str_approach[] PROGMEM = "APPROACH";
@@ -40,7 +39,7 @@ const char str_unknown[] PROGMEM = "UNKNOWN";
 
 // モード名の配列（プログラムメモリに格納）
 const char* const mode_names[] PROGMEM = {
-  str_init, str_direction, str_search, str_check, str_approach, str_turn,
+  str_init, str_search, str_check, str_approach, str_turn,
   str_wait, str_escape, str_avoid, str_stop, str_move,
   str_climb,
   str_check_zone, 
@@ -54,7 +53,7 @@ const char* const mode_names[] PROGMEM = {
  * @param mode モード番号
  */
 void printModeName(byte mode) {
-  if (mode < 14) {
+  if (mode < 13) {
     // プログラムメモリから文字列をバッファにコピー
     char buffer[20];
     strcpy_P(buffer, (char*)pgm_read_word(&(mode_names[mode])));
@@ -202,102 +201,13 @@ void task() {
     // STATE_INIT: 初期化状態
     // ========================================
     case STATE_INIT:
-      // 探索モードに遷移 💡 STATE_DIRECTION に変更
-      robot_state.mode = STATE_DIRECTION;
-      robot_state.state_start_time = millis(); // 💡 新しい状態の開始時刻を記録
+      // 探索モードに遷移
+      robot_state.mode = STATE_SEARCH;
+      robot_state.search_start_time = millis();
       robot_state.search_rotation_count = 0;
       robot_state.object_detected_in_search = false;
       pi_ctrl.reset();  // PI制御をリセット
       break;
-
-    // ========================================
-    // STATE_DIRECTION: 💡 目標方向の反対（TARGET_HEADING+180°）を向く（一度きり）
-    // ========================================
-    case STATE_DIRECTION: {
-      // 旋回後の直進開始時刻を記録するstatic変数
-      static unsigned long straight_start_time = 0;
-      
-      // 最終的な目標方位を計算 (TARGET_HEADING + 180°)
-      float target_reverse_heading = TARGET_HEADING + 180.0;
-      if (target_reverse_heading >= 360.0) {
-        target_reverse_heading -= 360.0;
-      }
-    
-      // 黒線・赤色・青色を検知したら回避モードへ
-      if (color_sensor.current_color == COLOR_BLACK ||
-      color_sensor.current_color == COLOR_RED ||
-      color_sensor.current_color == COLOR_BLUE) {
-      robot_state.mode = STATE_AVOID;
-      robot_state.state_start_time = millis();
-      }
-      
-    // ========================================
-    // サブステップ 1: 弧を描く旋回
-    // ========================================
-    if (straight_start_time == 0) {
-        // 最初の100msは安定化のために停止
-        if (millis() - robot_state.state_start_time < 100) {
-          motor_ctrl.stop();
-          break;
-        }
-          
-        // PI制御で目標方位への制御入力を計算
-        float u = turnTo(target_reverse_heading);
-          
-        // 方位角誤差を計算
-        float heading_error = target_reverse_heading - compass_state.current_heading;
-        while (heading_error < -180) heading_error += 360;
-        while (heading_error > 180) heading_error -= 360;
-
-        // 💡 旋回速度の基本値 (弧を描くための前進成分)
-        // const int BASE_TURN_SPEED = 50; 
-          
-        // 制御入力 u を使って左右のモーター速度を計算
-        // 弧を描く旋回: (基本速度 + 制御) / (基本速度 - 制御)
-        int left = constrain(MOTOR_TURN + u * 0.5, 0, 130);
-        int right = constrain(MOTOR_TURN - u * 0.5, 0, 130);
-          
-        // 💡 旋回完了判定（誤差5度未満）
-        if (abs(u) < 2 || abs(heading_error) < 5.0) {
-            motor_ctrl.stop();
-            straight_start_time = millis(); // 直進開始時刻を記録
-            break;
-        }
-          
-        motor_ctrl.setSpeeds(left, right);
-          
-        // タイムアウト（5秒）したら強制的に直進ステップへ
-        if (millis() - robot_state.state_start_time > 5000) {
-            motor_ctrl.stop();
-            straight_start_time = millis();
-        }
-        break;
-    }
-      
-    // ========================================
-    // サブステップ 2: 直進（2秒間）
-    // ========================================
-    if (millis() - straight_start_time < 2000) {
-        // 2秒間前進
-        motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE); 
-        break;
-    }
-
-    // ========================================
-    // サブステップ 3: 完了
-    // ========================================
-    motor_ctrl.stop();
-    // 旋回+直進完了 → STATE_SEARCH に遷移
-    robot_state.mode = STATE_SEARCH;
-    robot_state.search_start_time = millis();
-    robot_state.search_rotation_count = 0;
-    robot_state.object_detected_in_search = false;
-    pi_ctrl.reset();
-      
-    // straight_start_timeをリセットして次の実行に備える（このモードは一度きりだが念のため）
-    straight_start_time = 0; 
-    break;
-  }
 
     // ========================================
     // STATE_SEARCH: 探索状態
@@ -350,19 +260,29 @@ void task() {
       break;
     }
 
-    // ========================================
+// ========================================
     // STATE_MOVE: 移動状態
     // ========================================
     case STATE_MOVE:
       // 前進
       motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE);
       
-      // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
+      // 💡 修正: 傾斜検知による STATE_CLIMB への遷移
       if (isSlopeDetected()) {
         motor_ctrl.stop();
+        
+        // 💡 NEW: 開始方位を記録
+        compass_state.updateHeading(MAGNETIC_DECLINATION);
+        robot_state.climb_start_heading = compass_state.current_heading;
+        robot_state.climb_phase = 0;  // 円弧旋回フェーズから開始
+        
         robot_state.mode = STATE_CLIMB;
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
+        
+        Serial.print(F("Climb started at heading: "));
+        Serial.println(robot_state.climb_start_heading, 1);
+        
         break;
       }
 
@@ -439,8 +359,8 @@ void task() {
       }
       break;
 
-    // ========================================
-    // STATE_TURN_TO_TARGET: 目標方位へ旋回状態 //
+// ========================================
+    // STATE_TURN_TO_TARGET: 目標方位へ旋回状態
     // ========================================
     case STATE_TURN_TO_TARGET: {
       // 最初の100msは停止（旋回開始前の安定化）

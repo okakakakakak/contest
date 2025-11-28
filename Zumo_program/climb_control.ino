@@ -204,6 +204,7 @@ void runClimbMode() {
     return;
   }
   
+  /*
   // ========================================
   // フェーズ2: 5秒間平地で大きく右旋回
   // ========================================
@@ -218,7 +219,37 @@ void runClimbMode() {
     }
     motor_ctrl.setSpeeds(200, 105);
     return;
-  }
+  }*/
+// フェーズ2: ふもとを大きく右旋回し、機体の右側がTARGET_HEADINGを向いたら次へ
+if (robot_state.climb_phase == 2) {
+    if (phase_start_time == 0) {
+        phase_start_time = millis();
+        Serial.println(F("CLIMB Phase 2: Big right turn to align side with TARGET_HEADING"));
+    }
+
+    // 常に大きく右旋回（左速い、右遅い）
+    motor_ctrl.setSpeeds(200, 105);
+
+    // 機体の右側がTARGET_HEADINGを向いているか判定
+    // → 現在の方位 +90° が TARGET_HEADING に近いかどうか
+    float side_heading = compass_state.current_heading + 85.0;
+    if (side_heading >= 360.0) side_heading -= 360.0;
+
+    float heading_error = TARGET_HEADING - side_heading;
+    while (heading_error < -180) heading_error += 360;
+    while (heading_error > 180) heading_error -= 360;
+
+    // 誤差が一定以下なら次フェーズへ
+    if (abs(heading_error) < 10.0) {  // 10°以内で判定
+        motor_ctrl.stop();
+        robot_state.climb_phase = 3;  // 向き調整フェーズへ
+        phase_start_time = 0;
+        Serial.println(F("Right side aligned with TARGET_HEADING. Moving to Phase 3."));
+    }
+    return;
+}
+
+
   
   // ========================================
   // フェーズ3: 右に0.5秒旋回（向き調整）

@@ -81,7 +81,7 @@ void ColorSensorState::calibrate() {
   Serial.println(F("Calibrating..."));
   
   // キャリブレーション中は低速で前進
-  motor_ctrl.setSpeeds(60, 60);
+  motor_ctrl.setSpeeds(90, 90);
 
   // 最小値を最大値で初期化（後で小さい値で上書き）
   r_min = 65535;
@@ -342,7 +342,7 @@ void calibrationCompassAdvanced() {
                  mx_min, mx_max, my_min, my_max);
     
     // 時計回りに回転（左モーター正転、右モーター逆転）
-    motor_ctrl.setSpeeds(120, -120);
+    motor_ctrl.setSpeeds(180, -180);
     delay(20);
   }
   
@@ -356,7 +356,7 @@ void calibrationCompassAdvanced() {
                  mx_min, mx_max, my_min, my_max);
     
     // 反時計回りに回転（左モーター逆転、右モーター正転）
-    motor_ctrl.setSpeeds(-120, 120);
+    motor_ctrl.setSpeeds(-180, 180);
     delay(20);
   }
   
@@ -368,7 +368,7 @@ void calibrationCompassAdvanced() {
     compass_state.compass.read();
     updateMinMax(compass_state.compass.m.x, compass_state.compass.m.y,
                  mx_min, mx_max, my_min, my_max);
-    motor_ctrl.setSpeeds(120, -120);
+    motor_ctrl.setSpeeds(180, -180);
     delay(20);
   }
   

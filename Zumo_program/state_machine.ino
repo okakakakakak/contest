@@ -256,8 +256,8 @@ void task() {
           
         // 制御入力 u を使って左右のモーター速度を計算
         // 弧を描く旋回: (基本速度 + 制御) / (基本速度 - 制御)
-        int left = constrain(MOTOR_TURN + u * 0.5, 0, 130);
-        int right = constrain(MOTOR_TURN - u * 0.5, 0, 130);
+        int left = constrain(MOTOR_TURN + u * 0.5, 0, 250);
+        int right = constrain(MOTOR_TURN - u * 0.5, 0, 250);
           
         // 💡 旋回完了判定（誤差5度未満）
         if (abs(u) < 2 || abs(heading_error) < 5.0) {
@@ -488,8 +488,8 @@ void task() {
         int right = -u * speed_factor;
         
         // 速度を制限
-        left = constrain(left, -130, 130);
-        right = constrain(right, -130, 130);
+        left = constrain(left, -195, 195);
+        right = constrain(right, -195, 195);
         
         motor_ctrl.setSpeeds(left, right);
       }
@@ -572,8 +572,8 @@ void task() {
       int right = MOTOR_ESCAPE - control_u * 0.3;
       
       // 速度を制限
-      left = constrain(left, -200, 200);
-      right = constrain(right, -200, 200);
+      left = constrain(left, -210, 210);
+      right = constrain(right, -210, 210);
       
       motor_ctrl.setSpeeds(left, right);
       break;

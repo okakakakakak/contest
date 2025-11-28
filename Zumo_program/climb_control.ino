@@ -284,7 +284,7 @@ void runClimbMode() {
   // ========================================
   // PI制御によるロール角補正
   // ========================================
-  
+  float control_yaw = 0; //らせん登頂追加　PI制御関連なのでmotion_controlに統合すべき
   // ロール角の目標値は0度（まっすぐ）
   float roll_error = 0.0 - current_roll;
   
@@ -319,6 +319,20 @@ void runClimbMode() {
   }
   
   // ========================================
+  // らせん登頂追加分（Yaw補正）
+  // ========================================
+  compass_state.updateHeading(MAGNETIC_DECLINATION);
+  float current_heading = compass_state.current_heading;
+  float yaw_error = TARGET_HEADING - current_heading;
+  if (yaw_error > 180) yaw_error -= 360;
+  if (yaw_error < -180) yaw_error += 360;
+
+  control_yaw = pi_ctrl.kp * yaw_error + pi_ctrl.ti_inv * pi_ctrl.sum_e;
+  pi_ctrl.sum_e += yaw_error;
+  control_yaw = constrain(control_yaw, -40, 40);
+
+  
+  // ========================================
   // モーター速度の計算
   // ========================================
   // ロール角が正（右に傾いている）→ 左モーターを速くして左に曲がる
@@ -327,8 +341,8 @@ void runClimbMode() {
   //int left = CLIMB_BASE_SPEED + control_u;
   //int right = CLIMB_BASE_SPEED - control_u;
   //らせん登頂用(左カーブ)
-  int left = CLIMB_BASE_SPEED - SPIRAL_OFFSET + control_u;
-  int right = CLIMB_BASE_SPEED + SPIRAL_OFFSET - control_u;
+  int left = CLIMB_BASE_SPEED - SPIRAL_OFFSET + control_u + control_yaw;
+  int right = CLIMB_BASE_SPEED + SPIRAL_OFFSET - control_u - control_yaw;
 
   
   // スピードを制限（後退しないように0以上に制限）

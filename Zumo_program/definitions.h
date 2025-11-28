@@ -63,6 +63,7 @@
 #define MOTOR_AVOID_ROT  140   // 回避時の回転速度
 #define MOTOR_MOVE       140   // 移動時の速度
 #define MOTOR_STOP       0     // 停止（速度0）
+#define MOTOR_TURN       120    // 💡 旋回速度の基本値 (弧を描くための前進成分)
 
 // ============================================
 // 加速度センサー定数

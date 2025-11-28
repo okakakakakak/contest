@@ -326,14 +326,14 @@ void calibrationCompassAdvanced() {
   float mx_max = -32768, my_max = -32768;  // 最大値を最小値で初期化
   float mx_min = 32767, my_min = 32767;    // 最小値を最大値で初期化
   
-  Serial.println(F("Rotating 15s..."));
+  Serial.println(F("Rotating 10s..."));
   
   unsigned long startTime = millis();
   
   // ========================================
-  // フェーズ1: 時計回りに5秒間回転
+  // フェーズ1: 時計回りに3.3秒間回転
   // ========================================
-  while (millis() - startTime < 5000) {
+  while (millis() - startTime < 3300) {
     // 地磁気を読み取る
     compass_state.compass.read();
     
@@ -347,10 +347,10 @@ void calibrationCompassAdvanced() {
   }
   
   // ========================================
-  // フェーズ2: 反時計回りに5秒間回転
+  // フェーズ2: 反時計回りに3.3秒間回転
   // ========================================
   startTime = millis();
-  while (millis() - startTime < 5000) {
+  while (millis() - startTime < 3300) {
     compass_state.compass.read();
     updateMinMax(compass_state.compass.m.x, compass_state.compass.m.y,
                  mx_min, mx_max, my_min, my_max);
@@ -361,10 +361,10 @@ void calibrationCompassAdvanced() {
   }
   
   // ========================================
-  // フェーズ3: 再度時計回りに5秒間回転
+  // フェーズ3: 再度時計回りに3.3秒間回転
   // ========================================
   startTime = millis();
-  while (millis() - startTime < 5000) {
+  while (millis() - startTime < 3300) {
     compass_state.compass.read();
     updateMinMax(compass_state.compass.m.x, compass_state.compass.m.y,
                  mx_min, mx_max, my_min, my_max);

@@ -268,8 +268,8 @@ void task() {
           
         motor_ctrl.setSpeeds(left, right);
           
-        // タイムアウト（5秒）したら強制的に直進ステップへ
-        if (millis() - robot_state.state_start_time > 5000) {
+        // タイムアウト（3.3秒）したら強制的に直進ステップへ
+        if (millis() - robot_state.state_start_time > 3300) {
             motor_ctrl.stop();
             straight_start_time = millis();
         }
@@ -277,9 +277,9 @@ void task() {
     }
       
     // ========================================
-    // サブステップ 2: 直進（2秒間）
+    // サブステップ 2: 直進（1.3秒間）
     // ========================================
-    if (millis() - straight_start_time < 2000) {
+    if (millis() - straight_start_time < 1300) {
         // 2秒間前進
         motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE); 
         break;
@@ -306,7 +306,7 @@ void task() {
     // ========================================
     case STATE_SEARCH: {
       // 物体検知ロジック：30cm未満の物体を3回検知したら静止確認へ
-      if (dist > 0 && dist < 30) {
+      if (dist > 0 && dist < 40) {
         // 初めて物体を検知した場合
         if (!robot_state.object_detected_in_search) {
           robot_state.object_detected_in_search = true;
@@ -338,7 +338,7 @@ void task() {
       
       // 💡 修正箇所：時間が短くなる問題を防ぐためのロジック
       // 探索開始からの経過時間で STATE_MOVE に遷移
-      if (millis() - robot_state.search_start_time > 5000) {
+      if (millis() - robot_state.search_start_time > 3300) {
         // 5秒経過したら移動モードへ
         // 🚨 意図しないリセットを防ぐため、オブジェクト検知フラグも確認
         motor_ctrl.stop();
@@ -393,7 +393,7 @@ void task() {
         robot_state.object_detected_in_search = false;
       } 
       // 2秒経過したら探索モードへ
-      else if (millis() - robot_state.state_start_time > 2000) {
+      else if (millis() - robot_state.state_start_time > 1300) {
         motor_ctrl.stop();
         robot_state.mode = STATE_SEARCH;
         robot_state.search_start_time = millis();
@@ -583,14 +583,14 @@ void task() {
 // STATE_DEPOSIT: 預け入れ動作状態（1秒後退 + 半回転 + 3秒前進）
 // ========================================
 case STATE_DEPOSIT:
-  if (millis() - robot_state.state_start_time < 1000) {
+  if (millis() - robot_state.state_start_time < 670) {
     // 最初の1秒間：後退
     motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
-  } else if (millis() - robot_state.state_start_time < 2500) {
+  } else if (millis() - robot_state.state_start_time < 1500) {
     // 次の1.5秒間：半回転（180度）
     // 左モーター正転、右モーター逆転で時計回り
     motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
-  } else if (millis() - robot_state.state_start_time < 5500) {
+  } else if (millis() - robot_state.state_start_time < 3670) {
     // 次の3秒間：前進
     motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
   } else {
@@ -619,14 +619,14 @@ case STATE_DEPOSIT:
 // STATE_AVOID: 回避状態（黒線を避ける）
 // ========================================
 case STATE_AVOID:
-  if (millis() - robot_state.state_start_time < 1000) {
+  if (millis() - robot_state.state_start_time < 670) {
     // 最初の1000ms：後退
     motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
-  } else if (millis() - robot_state.state_start_time < 2500) {
+  } else if (millis() - robot_state.state_start_time < 1500) {
     // 次の2500ms：反時計回りに回転
     // 左モーター逆転、右モーター正転
     motor_ctrl.setSpeeds(-MOTOR_AVOID_ROT, MOTOR_AVOID_ROT);
-  } else if (millis() - robot_state.state_start_time < 4000) {
+  } else if (millis() - robot_state.state_start_time <2670) {
     // 次の2000ms（2秒）：前進
     motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
   } else {

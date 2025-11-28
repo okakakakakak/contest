@@ -232,7 +232,7 @@ if (robot_state.climb_phase == 2) {
 
     // 機体の右側がTARGET_HEADINGを向いているか判定
     // → 現在の方位 +90° が TARGET_HEADING に近いかどうか
-    float side_heading = compass_state.current_heading + 85.0;
+    float side_heading = compass_state.current_heading + 90.0;
     if (side_heading >= 360.0) side_heading -= 360.0;
 
     float heading_error = TARGET_HEADING - side_heading;

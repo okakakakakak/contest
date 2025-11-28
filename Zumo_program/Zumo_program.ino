@@ -110,6 +110,35 @@ void setup() {
   Serial.print(F("Ultrasonic..."));
   ultrasonic.init();  // ピンを設定
   Serial.println(F("OK"));
+
+    // ========================================
+  // ゴール色のリクエストと受信
+  // ========================================
+  Serial.println(F("--- Requesting Goal Color ---"));
+  Serial.println("REQUEST_COLOR");  // Processingにリクエスト送信
+
+  unsigned long startTime = millis();
+  while (!Serial.available()) {
+    if (millis() - startTime > 3000) {
+      Serial.println(F("Timeout: No color response"));
+      break;
+    }
+    delay(10);
+  }
+
+  if (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'B') {
+      TARGET_HEADING = 200.0 - 180;
+      Serial.println("GOAL_COLOR:B");  //確認送信
+    } else if (c == 'R') {
+      TARGET_HEADING = 200.0 + 0.0;
+      Serial.println("GOAL_COLOR:R");  //確認送信
+    } else {
+      Serial.print(F("Unexpected color code: "));
+      Serial.println(c);
+    }
+  }
   
   // ========================================
   // コンパスキャリブレーション

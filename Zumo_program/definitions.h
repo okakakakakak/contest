@@ -38,33 +38,35 @@
 // ============================================
 // ロボットの動作モードを表す状態コード
 #define STATE_INIT              0   // 初期化状態
-#define STATE_SEARCH            1   // 探索状態（回転しながら物体を探す）
-#define STATE_CHECK_STATIC      2   // 静止物体確認状態
-#define STATE_APPROACH          3   // 接近状態（物体に近づく）
-#define STATE_TURN_TO_TARGET    4   // 目標方位へ旋回状態
-#define STATE_WAIT_AFTER_TURN   5   // 旋回後の待機状態
-#define STATE_ESCAPE            6   // 脱出状態（物体を運搬中）
-#define STATE_AVOID             7   // 回避状態（黒線を避ける）
-#define STATE_STOP              8   // 停止状態
-#define STATE_MOVE              9   // 移動状態（前進）
-#define STATE_CLIMB             10  // 坂道登坂モード
-#define STATE_CHECK_ZONE        11  // ゾーン確認状態
-#define STATE_DEPOSIT           12  // 預け入れ状態
+#define STATE_DIRECTION         1   // 💡 目標方向を向く（一度きり）
+#define STATE_SEARCH            2   // 探索状態（回転しながら物体を探す）
+#define STATE_CHECK_STATIC      3   // 静止物体確認状態
+#define STATE_APPROACH          4   // 接近状態（物体に近づく）
+#define STATE_TURN_TO_TARGET    5   // 目標方位へ旋回状態
+#define STATE_WAIT_AFTER_TURN   6   // 旋回後の待機状態
+#define STATE_ESCAPE            7   // 脱出状態（物体を運搬中）
+#define STATE_AVOID             8   // 回避状態（黒線を避ける）
+#define STATE_STOP              9   // 停止状態
+#define STATE_MOVE              10   // 移動状態（前進）
+#define STATE_CLIMB             11  // 坂道登坂モード
+#define STATE_CHECK_ZONE        12  // ゾーン確認状態（STATE_CLIMBの挿入で1つずれる）
+#define STATE_DEPOSIT           13  // 預け入れ状態（STATE_CLIMBの挿入で1つずれる）
 
 // ============================================
 // モーター速度定数
 // ============================================
 // 各状態で使用するモーター速度の基準値
 #define MOTOR_ROTATE     140   // 回転時の速度
-#define MOTOR_FORWARD    140   // 前進時の速度
-#define MOTOR_ESCAPE     140   // 脱出時の速度
+#define MOTOR_FORWARD    240   // 前進時の速度
+#define MOTOR_ESCAPE     240   // 脱出時の速度
 #define MOTOR_REVERSE    -140  // 後退時の速度（負の値）
 #define MOTOR_AVOID_ROT  140   // 回避時の回転速度
 #define MOTOR_MOVE       140   // 移動時の速度
 #define MOTOR_STOP       0     // 停止（速度0）
+#define MOTOR_TURN       120   // 💡 旋回速度の基本値 (弧を描くための前進成分)
 
 // ============================================
-// 加速度センサー定数
+// 加速度センサー定数 
 // ============================================
 // 坂道検知に使用する加速度センサーのパラメータ
 #define ACCEL_READ_INTERVAL     50   // 加速度センサーの計測間隔 (ms)
@@ -191,7 +193,7 @@ struct UltrasonicSensor {
 };
 
 // ============================================
-// ロボット状態構造体（登坂フェーズ追加版）
+// ロボット状態構造体（最適化 + 登坂フェーズ追加）
 // ============================================
 /**
  * ロボット全体の状態を管理する構造体
@@ -213,8 +215,8 @@ struct RobotState {
   byte cups_delivered;  // 運搬したカップの数
   
   // 💡 NEW: 登坂モード用の変数
-  float climb_start_heading;   // 登坂開始時の方位角（使用しない - 予約）
-  byte climb_phase;            // 登坂のフェーズ（0:後退、1:左旋回、2:大回り、3:右旋回、4:前進、5:登坂）
+  float climb_start_heading;   // 登坂開始時の方位角（将来の拡張用）
+  byte climb_phase;            // 登坂のフェーズ（0-7）
   
   // コンストラクタ：初期化
   RobotState() : 
@@ -276,7 +278,7 @@ extern PIController pi_ctrl;             // PI制御
 // 定数（PROGMEM使用）
 // ============================================
 // プログラムメモリに格納される定数
-extern const float TARGET_HEADING;        // 目標方位角（度）
+extern float TARGET_HEADING;              // 目標方位角（度）
 extern const float MAGNETIC_DECLINATION;  // 磁気偏角（度）
 
 // ============================================
@@ -288,9 +290,10 @@ void printStatus();                       // ステータスを表示
 void task();                              // メインタスク（状態遷移）
 float turnTo(float target_heading);       // 目標方位に旋回（PI制御）
 void calibrationCompassAdvanced();        // コンパスキャリブレーション
-bool isSlopeDetected();                   // 傾斜検知
-bool hasReachedTop();                     // 登頂判定
-void runClimbMode();                      // 登坂モード実行
-void calibrateAccelZOffset();             // Z軸オフセットキャリブレーション
+bool isSlopeDetected();                   // 💡 傾斜検知
+bool hasReachedTop();                     // 💡 登頂判定
+void runClimbMode();                      // 💡 登坂モード実行
+void executeRollControl(unsigned long &lastAccelRead, float &current_roll, float &roll_integral);  // 💡 ロール角制御
+void calibrateAccelZOffset();             // 💡 Z軸オフセットキャリブレーション
 
 #endif

@@ -142,8 +142,134 @@ bool hasReachedTop() {
 }
 
 // ============================================
+<<<<<<< Updated upstream
 // 坂道登坂モードの実行（後退→大回り→登坂→頂上→下山）
 // ============================================
+=======
+// 補助関数: ロール角制御（フィルタ・PI制御強化版）
+// ============================================
+/**
+ * ロール角に基づくPI制御で姿勢を安定化
+ * ローパスフィルタで振動を除去し、精密な制御を実現
+ * 
+ * @param lastAccelRead 最後に加速度を読み取った時刻（参照渡し）
+ * @param current_roll 現在のロール角（参照渡し）
+ * @param roll_integral 積分項（参照渡し）
+ */
+void executeRollControl(unsigned long &lastAccelRead, float &current_roll, float &roll_integral) {
+    // 基本速度（坂道なので少しパワーが必要）
+    const int CLIMB_BASE_SPEED = 150; 
+    
+    // 制御ゲイン（要調整）
+    const float KP_ROLL = 4.0;   // 比例ゲイン
+    const float KI_ROLL = 1.5;   // 積分ゲイン
+    const float DT_SEC = 0.05;   // 制御周期 (50ms = 0.05s)
+
+    // フィルタ係数（0.0〜1.0）: 小さいほど滑らかだが遅れが生じる
+    const float FILTER_ALPHA = 0.2; 
+    static float filtered_ay = 0.0;
+    static float filtered_az = 0.0;
+    static bool filter_initialized = false;
+
+    // 一定間隔(ACCEL_READ_INTERVAL = 50ms)で加速度を読み取る
+    if (millis() - lastAccelRead > ACCEL_READ_INTERVAL) {
+        compass_state.compass.readAcc();
+        
+        // 1. 生データの取得
+        float raw_ay = compass_state.compass.a.y;
+        float raw_az = compass_state.compass.a.z;
+
+        // 2. ローパスフィルタ（振動対策）
+        if (!filter_initialized) {
+            filtered_ay = raw_ay;
+            filtered_az = raw_az;
+            filter_initialized = true;
+        } else {
+            // 前回の値と今回の値を混ぜて滑らかにする
+            filtered_ay = filtered_ay * (1.0 - FILTER_ALPHA) + raw_ay * FILTER_ALPHA;
+            filtered_az = filtered_az * (1.0 - FILTER_ALPHA) + raw_az * FILTER_ALPHA;
+        }
+
+        // 3. ロール角の計算
+        float norm = sqrt(filtered_ay * filtered_ay + filtered_az * filtered_az);
+        if (norm < 100) norm = 100; // ゼロ除算防止
+
+        float ay_normalized = filtered_ay / norm;
+        ay_normalized = constrain(ay_normalized, -1.0, 1.0);
+        
+        // 角度計算（ラジアン → 度）
+        float roll_rad = asin(ay_normalized);
+        current_roll = roll_rad * 180.0 / PI;
+
+        lastAccelRead = millis();
+    }
+    
+    // ========================================
+    // PI制御
+    // ========================================
+    
+    // 目標値は 0.0度（水平）
+    float roll_error = 0.0 - current_roll;
+
+    float control_u = 0;
+
+    // 不感帯（2度未満の傾きは無視してハンチング防止）
+    if (abs(roll_error) < 2.0) {
+        control_u = 0;
+    } else {
+        // 積分項の計算
+        roll_integral += roll_error * DT_SEC;
+        
+        // アンチワインドアップ（積分の暴走を防ぐ制限）
+        roll_integral = constrain(roll_integral, -15.0, 15.0);
+
+        // 操作量の計算 u = Kp*e + Ki*∫e
+        control_u = (KP_ROLL * roll_error) + (KI_ROLL * roll_integral);
+    }
+    
+    // 操作量の制限（最大速度差）
+    control_u = constrain(control_u, -100, 100);
+    
+    // ========================================
+    // モーター出力の決定
+    // ========================================
+    int left = CLIMB_BASE_SPEED + control_u;
+    int right = CLIMB_BASE_SPEED - control_u;
+
+    // モーター速度の正規化
+    left = constrain(left, 0, 255);
+    right = constrain(right, 0, 255);
+    
+    motor_ctrl.setSpeeds(left, right);
+
+    // デバッグ用
+    static unsigned long lastDebug = 0;
+    if (millis() - lastDebug > 200) {
+        Serial.print(F("ROLL_CTRL: Roll:"));
+        Serial.print(current_roll);
+        Serial.print(F(" Err:"));
+        Serial.print(roll_error);
+        Serial.print(F(" U:"));
+        Serial.println(control_u);
+        lastDebug = millis();
+    }
+}
+
+// ============================================
+// 坂道登坂モードの実行（後退→大回り→登坂→頂上→下山）
+// ============================================
+/**
+ * 7段階のフェーズで坂道を登り、下山まで完了する
+ * フェーズ0: 後退
+ * フェーズ1: 左旋回
+ * フェーズ2: 大回り
+ * フェーズ3: 右旋回
+ * フェーズ4: 前進
+ * フェーズ5: 登坂
+ * フェーズ6: 頂上横断
+ * フェーズ7: 下山
+ */
+>>>>>>> Stashed changes
 void runClimbMode() {
   static unsigned long lastAccelRead = 0;
   static float current_roll = 0.0;
@@ -201,6 +327,90 @@ void runClimbMode() {
       return;
     }
     motor_ctrl.setSpeeds(-MOTOR_AVOID_ROT, MOTOR_AVOID_ROT);
+<<<<<<< Updated upstream
+=======
+    return;
+  }
+  
+  // ========================================
+  // フェーズ2: 5秒間平地で大きく右旋回
+  // ========================================
+  if (robot_state.climb_phase == 2) {
+    if (phase_start_time == 0) phase_start_time = millis();
+    
+    if (millis() - phase_start_time > 5000) {
+      motor_ctrl.stop();
+      robot_state.climb_phase = 3;
+      phase_start_time = 0;
+      return;
+    }
+    motor_ctrl.setSpeeds(200, 105);
+    return;
+  }
+  
+  // ========================================
+  // フェーズ3: 右に0.5秒旋回（向き調整）
+  // ========================================
+  if (robot_state.climb_phase == 3) {
+    if (phase_start_time == 0) phase_start_time = millis();
+    
+    if (millis() - phase_start_time > 650) {
+      motor_ctrl.stop();
+      delay(200);
+      robot_state.climb_phase = 4;
+      phase_start_time = 0;
+      Serial.println(F("CLIMB Phase 4: Move forward"));
+      return;
+    }
+    motor_ctrl.setSpeeds(MOTOR_AVOID_ROT, -MOTOR_AVOID_ROT);
+    return;
+  }
+  
+  // ========================================
+  // フェーズ4: 1秒前進（坂への助走）
+  // ========================================
+  if (robot_state.climb_phase == 4) {
+    if (phase_start_time == 0) phase_start_time = millis();
+    
+    if (millis() - phase_start_time > 1000) {
+      robot_state.climb_phase = 5;
+      phase_start_time = 0;
+      roll_integral = 0;
+      Serial.println(F("CLIMB Phase 5: Climbing UP"));
+      return;
+    }
+    motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
+    return;
+  }
+  
+  // ========================================
+  // フェーズ5: 直進登坂（ロール角制御）
+  // ========================================
+  if (robot_state.climb_phase == 5) {
+    // 登頂したらフェーズ6（頂上移動）へ
+    if (hasReachedTop()) {
+      robot_state.climb_phase = 6;
+      phase_start_time = 0;
+      roll_integral = 0;
+      Serial.println(F("Reached Top! Moving to traverse plateau."));
+      return;
+    }
+    
+    // カップ検知時は一時停止・確認
+    if (dist > 0 && dist < 30) {
+      motor_ctrl.stop();
+      robot_state.mode = STATE_CHECK_STATIC;
+      robot_state.search_rotation_count = 0;
+      robot_state.object_detected_in_search = false;
+      roll_integral = 0;
+      robot_state.climb_phase = 0;
+      phase_start_time = 0;
+      return;
+    }
+    
+    // ロール角制御を実行
+    executeRollControl(lastAccelRead, current_roll, roll_integral);
+>>>>>>> Stashed changes
     return;
   }
   
@@ -293,13 +503,17 @@ void runClimbMode() {
     motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
 
     // 坂道を検知したら「下り坂」と判断してフェーズ7へ
+<<<<<<< Updated upstream
     // isSlopeDetectedは絶対値で判定するため、下りも検知可能
+=======
+>>>>>>> Stashed changes
     if (isSlopeDetected()) {
       robot_state.climb_phase = 7;
       phase_start_time = 0;
       roll_integral = 0;
       Serial.println(F("Descent detected! Starting descent."));
       return;
+<<<<<<< Updated upstream
     }
 
     // 万が一、5秒以上平地が続いたら（頂上が非常に広い、または検知ミス）、強制的に探索へ
@@ -460,6 +674,53 @@ void executeRollControl(unsigned long &lastAccelRead, float &current_roll, float
         Serial.println(control_u);
         lastDebug = millis();
     }
+=======
+    }
+
+    // 万が一、5秒以上平地が続いたら強制的に探索へ
+    static unsigned long traverseStart = 0;
+    if (traverseStart == 0) traverseStart = millis();
+    if (millis() - traverseStart > 5000) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_SEARCH;
+        robot_state.search_start_time = millis();
+        robot_state.search_rotation_count = 0;
+        robot_state.object_detected_in_search = false;
+        robot_state.climb_phase = 0;
+        traverseStart = 0;
+        Serial.println(F("Timeout on top. Searching."));
+        return;
+    }
+    return;
+  }
+
+  // ========================================
+  // フェーズ7: 下り坂（ロール角制御で直進）
+  // ========================================
+  if (robot_state.climb_phase == 7) {
+    // 平地（下山完了）を検知したら終了
+    if (hasReachedTop()) {
+      motor_ctrl.stop();
+      Serial.println(F("Descended to flat ground. To SEARCH mode."));
+      
+      // 探索モードへ遷移
+      robot_state.mode = STATE_SEARCH;
+      robot_state.search_start_time = millis();
+      robot_state.search_rotation_count = 0;
+      robot_state.object_detected_in_search = false;
+      
+      // リセット
+      roll_integral = 0;
+      robot_state.climb_phase = 0;
+      phase_start_time = 0;
+      return;
+    }
+
+    // 下り坂もロール角制御を使って真っ直ぐ降りる
+    executeRollControl(lastAccelRead, current_roll, roll_integral);
+    return;
+  }
+>>>>>>> Stashed changes
 }
 
 // ============================================

@@ -30,7 +30,7 @@ PIController pi_ctrl;                   // PI制御
 // ============================================
 // 定数定義
 // ============================================
-const float TARGET_HEADING = 210.0;       // 目標方位角（度）
+float TARGET_HEADING = 210.0;       // 目標方位角（度）
 const float MAGNETIC_DECLINATION = -7.0;  // 磁気偏角（度、地域によって異なる）
 const char ROBOT_NAME[] PROGMEM = "Zumo1";  // ← ロボット名（必要に応じて変更）
 

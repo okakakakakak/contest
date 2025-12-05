@@ -192,7 +192,7 @@ void runClimbMode() {
   if (robot_state.climb_phase == 1) {
     if (phase_start_time == 0) phase_start_time = millis();
     
-    if (millis() - phase_start_time > 250) {
+    if (millis() - phase_start_time > 350) {
       motor_ctrl.stop();
       delay(200);
       robot_state.climb_phase = 2;
@@ -257,7 +257,7 @@ if (robot_state.climb_phase == 2) {
   if (robot_state.climb_phase == 3) {
     if (phase_start_time == 0) phase_start_time = millis();
     
-    if (millis() - phase_start_time > 250) {
+    if (millis() - phase_start_time > 500) {
       motor_ctrl.stop();
       delay(200);
       robot_state.climb_phase = 4;

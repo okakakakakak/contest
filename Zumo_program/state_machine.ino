@@ -427,7 +427,7 @@ void task() {
       }
       break;
 
-    // ========================================
+   // ========================================
     // STATE_APPROACH: 接近状態
     // ========================================
     case STATE_APPROACH:
@@ -438,6 +438,23 @@ void task() {
       robot_state.mode = STATE_AVOID;
       robot_state.state_start_time = millis();
       break;
+      }
+
+      // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
+      if (isSlopeDetected()) {
+        motor_ctrl.stop();
+        
+        // 開始方位を記録
+        compass_state.updateHeading(MAGNETIC_DECLINATION);
+        robot_state.climb_start_heading = compass_state.current_heading;
+        robot_state.climb_phase = 0;  // 円弧旋回フェーズから開始
+        
+        robot_state.mode = STATE_CLIMB;
+        robot_state.state_start_time = millis();
+        pi_ctrl.reset();
+        
+        Serial.println(F("Slope detected during APPROACH, switching to CLIMB"));
+        break;
       }
 
       // 前進

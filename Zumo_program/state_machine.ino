@@ -308,6 +308,11 @@ void task() {
     // STATE_SEARCH: 探索状態
     // ========================================
     case STATE_SEARCH: {
+      // ★ スタック検知クールダウン解除判定
+      if (!robot_state.allow_stack_check &&
+          millis() - robot_state.search_start_time > 1000) {
+        robot_state.allow_stack_check = true;
+      }
       // 物体検知ロジック：30cm未満の物体を3回検知したら静止確認へ
       if (dist > 0 && dist < 40) {
         // 初めて物体を検知した場合
@@ -353,7 +358,8 @@ void task() {
         robot_state.object_detected_in_search = false;
       }
       //// ★ スタック検知 → STACK
-      if (isStacked()) {
+      // スタック判定はフラグがtrueのときだけ
+      if (robot_state.allow_stack_check && isStacked()) {
         motor_ctrl.stop();
         robot_state.mode = STATE_STACK;
         robot_state.state_start_time = millis();
@@ -619,13 +625,6 @@ void task() {
       right = constrain(right, -210, 210);
       
       motor_ctrl.setSpeeds(left, right);
-      //// ★ スタック検知 → STACK
-      if (isStacked()) {
-        motor_ctrl.stop();
-        robot_state.mode = STATE_STACK;
-        robot_state.state_start_time = millis();
-        break;
-      }
       break;
     }
 
@@ -697,7 +696,13 @@ void task() {
         // PI制御をリセット
         pi_ctrl.reset();
       }
-      
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
       break;
 
     // ========================================
@@ -722,12 +727,14 @@ void task() {
           motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE); // 右旋回
       } else {
         // 探索モードへ復帰
-        motor_ctrl.stop();
+        motor_ctrl.setSpeeds(MOTOR_FORWARD/3, MOTOR_FORWARD/3); // 停止ではなく低速前進
         robot_state.mode = STATE_SEARCH;
         robot_state.search_start_time = millis();
         robot_state.search_rotation_count = 0;
         robot_state.object_detected_in_search = false;
         pi_ctrl.reset();
+        // ★ クールダウン開始
+        robot_state.allow_stack_check = false;
       }
       break;
   }

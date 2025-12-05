@@ -215,6 +215,9 @@ struct RobotState {
   unsigned long time_prev;  // 前回の時刻
   
   byte cups_delivered;  // 運搬したカップの数
+
+  // ★ スタック判定用フラグ
+  bool allow_stack_check;
   
   // 💡 NEW: 登坂モード用の変数
   float climb_start_heading;   // 登坂開始時の方位角（使用しない - 予約）

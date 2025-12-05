@@ -330,18 +330,28 @@ bool isStacked() {
 
     float norm = sqrt(ax*ax + ay*ay + az*az);
 
+    // モーターが動いているか？
+    bool motorsActive = (abs(motor_ctrl.left_speed) > 30 || abs(motor_ctrl.right_speed) > 30);
+
+    // 加速度変化が小さいか？（相対変化率で判定）
     static float prevNorm = 0;
-    if (abs(norm - prevNorm) < 50) {
+    bool accelStill = (prevNorm != 0 && abs(norm - prevNorm) / norm < 0.05); // 5%未満
+    prevNorm = norm;
+
+    if (motorsActive && accelStill) {
       stillCount++;
     } else {
-      stillCount = 0;
+      // リセットせず「減算」にすることでノイズに強くする
+      if (stillCount > 0) stillCount--;
     }
-    prevNorm = norm;
+
     lastCheck = millis();
   }
 
-  return (stillCount >= 3);  // 約0.6秒間動きなしでスタック判定
+  return (stillCount >= 5); // 約1秒間「ほぼ動きなし」でスタック判定
 }
+
+
 
 
 /**

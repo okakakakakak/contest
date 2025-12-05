@@ -133,6 +133,24 @@ rectMode(CORNER);
   if (myString2 != null) {
     text("Raw: " + myString2, width/2 + 20, tBaseY + tDistY * 8);
   }
+  // === Roll / Pitch 可視化（Zumo2） ===
+pushMatrix();
+translate(width/2 + 300, 300); // Zumo2 Roll表示位置（右上）
+rotate(radians(degrees(atan2(ay2, az2))));
+fill(200, 255, 200);
+rectMode(CENTER);
+rect(0, 0, 100, 20);
+popMatrix();
+
+pushMatrix();
+translate(width/2 + 450, 300); // Zumo2 Pitch表示位置（右上）
+rotate(radians(degrees(atan2(-ax2, sqrt(ay2*ay2 + az2*az2)))));
+fill(200, 200, 255);
+rectMode(CENTER);
+rect(0, 0, 20, 100);
+popMatrix();
+  // ✅ 描画モードを元に戻す
+rectMode(CORNER);
 
   // Zumo3（左下）
   fill(0); rect(0, height/2, width/2, height/2);
@@ -152,6 +170,24 @@ rectMode(CORNER);
   if (myString3 != null) {
     text("Raw: " + myString3, 20, height/2 + tBaseY + tDistY * 8);
   }
+  // === Roll / Pitch 可視化（Zumo3） ===
+pushMatrix();
+translate(300, height/2 + 300); // Zumo3 Roll表示位置（左下）
+rotate(radians(degrees(atan2(ay3, az3))));
+fill(200, 255, 200);
+rectMode(CENTER);
+rect(0, 0, 100, 20);
+popMatrix();
+
+pushMatrix();
+translate(450, height/2 + 300); // Zumo3 Pitch表示位置（左下）
+rotate(radians(degrees(atan2(-ax3, sqrt(ay3*ay3 + az3*az3)))));
+fill(200, 200, 255);
+rectMode(CENTER);
+rect(0, 0, 20, 100);
+popMatrix();
+  // ✅ 描画モードを元に戻す
+rectMode(CORNER);
 
   drawButton(); // ボタン描画
 }

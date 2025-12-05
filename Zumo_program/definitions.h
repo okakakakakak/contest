@@ -51,6 +51,8 @@
 #define STATE_CLIMB             11  // 坂道登坂モード
 #define STATE_CHECK_ZONE        12  // ゾーン確認状態（STATE_CLIMBの挿入で1つずれる）
 #define STATE_DEPOSIT           13  // 預け入れ状態（STATE_CLIMBの挿入で1つずれる）
+#define STATE_STACK             14  // スタック検知モード
+
 
 // ============================================
 // モーター速度定数

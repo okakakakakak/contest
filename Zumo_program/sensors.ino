@@ -315,6 +315,34 @@ static void updateMinMax(int x, int y, float& mx_min, float& mx_max, float& my_m
   if (y < my_min) my_min = y;
   if (y > my_max) my_max = y;
 }
+// ============================================
+// Stack検知関数（加速度センサー利用）
+// ============================================
+bool isStacked() {
+  static unsigned long lastCheck = 0;
+  static int stillCount = 0;
+
+  if (millis() - lastCheck > 200) {
+    compass_state.compass.readAcc();
+    float ax = compass_state.compass.a.x;
+    float ay = compass_state.compass.a.y;
+    float az = compass_state.compass.a.z;
+
+    float norm = sqrt(ax*ax + ay*ay + az*az);
+
+    static float prevNorm = 0;
+    if (abs(norm - prevNorm) < 50) {
+      stillCount++;
+    } else {
+      stillCount = 0;
+    }
+    prevNorm = norm;
+    lastCheck = millis();
+  }
+
+  return (stillCount >= 3);  // 約0.6秒間動きなしでスタック判定
+}
+
 
 /**
  * 地磁気センサーのキャリブレーションを行う関数

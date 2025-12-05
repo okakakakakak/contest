@@ -36,7 +36,9 @@ const char str_move[] PROGMEM = "MOVE";
 const char str_climb[] PROGMEM = "CLIMB";
 const char str_check_zone[] PROGMEM = "CHECK_ZONE";
 const char str_deposit[] PROGMEM = "DEPOSIT";
+const char str_stack[] PROGMEM = "STACK";
 const char str_unknown[] PROGMEM = "UNKNOWN";
+
 
 // モード名の配列（プログラムメモリに格納）
 const char* const mode_names[] PROGMEM = {
@@ -44,7 +46,8 @@ const char* const mode_names[] PROGMEM = {
   str_wait, str_escape, str_avoid, str_stop, str_move,
   str_climb,
   str_check_zone, 
-  str_deposit
+  str_deposit,
+  str_stack 
 };
 
 /**
@@ -54,7 +57,7 @@ const char* const mode_names[] PROGMEM = {
  * @param mode モード番号
  */
 void printModeName(byte mode) {
-  if (mode < 14) {
+  if (mode < 15) {
     // プログラムメモリから文字列をバッファにコピー
     char buffer[20];
     strcpy_P(buffer, (char*)pgm_read_word(&(mode_names[mode])));
@@ -349,10 +352,18 @@ void task() {
         robot_state.search_rotation_count = 0;
         robot_state.object_detected_in_search = false;
       }
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
+
       break;
     }
 
-// ========================================
+    // ========================================
     // STATE_MOVE: 移動状態
     // ========================================
     case STATE_MOVE:
@@ -400,6 +411,14 @@ void task() {
         robot_state.search_rotation_count = 0;
         robot_state.object_detected_in_search = false;
       }
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
+
       break;
 
     // ========================================
@@ -427,7 +446,7 @@ void task() {
       }
       break;
 
-   // ========================================
+    // ========================================
     // STATE_APPROACH: 接近状態
     // ========================================
     case STATE_APPROACH:
@@ -466,9 +485,16 @@ void task() {
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
       }
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
       break;
 
-// ========================================
+    // ========================================
     // STATE_TURN_TO_TARGET: 目標方位へ旋回状態
     // ========================================
     case STATE_TURN_TO_TARGET: {
@@ -593,33 +619,47 @@ void task() {
       right = constrain(right, -210, 210);
       
       motor_ctrl.setSpeeds(left, right);
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
       break;
     }
 
-// ========================================
-// STATE_DEPOSIT: 預け入れ動作状態（1秒後退 + 半回転 + 3秒前進）
-// ========================================
-case STATE_DEPOSIT:
-  if (millis() - robot_state.state_start_time < 670) {
-    // 最初の1秒間：後退
-    motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
-  } else if (millis() - robot_state.state_start_time < 1500) {
-    // 次の1.5秒間：半回転（180度）
-    // 左モーター正転、右モーター逆転で時計回り
-    motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
-  } else if (millis() - robot_state.state_start_time < 3670) {
-    // 次の3秒間：前進
-    motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
-  } else {
-    // 完了したら探索モードへ
-    motor_ctrl.stop();
-    robot_state.mode = STATE_SEARCH;
-    robot_state.search_start_time = millis();
-    robot_state.search_rotation_count = 0;
-    robot_state.object_detected_in_search = false;
-    Serial.println(F("Deposit complete, searching for next cup"));
-  }
-  break;
+    // ========================================
+    // STATE_DEPOSIT: 預け入れ動作状態（1秒後退 + 半回転 + 3秒前進）
+    // ========================================
+    case STATE_DEPOSIT:
+      if (millis() - robot_state.state_start_time < 670) {
+        // 最初の1秒間：後退
+        motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
+      } else if (millis() - robot_state.state_start_time < 1500) {
+        // 次の1.5秒間：半回転（180度）
+        // 左モーター正転、右モーター逆転で時計回り
+        motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
+      } else if (millis() - robot_state.state_start_time < 3670) {
+        // 次の3秒間：前進
+        motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
+      } else {
+        // 完了したら探索モードへ
+        motor_ctrl.stop();
+        robot_state.mode = STATE_SEARCH;
+        robot_state.search_start_time = millis();
+        robot_state.search_rotation_count = 0;
+        robot_state.object_detected_in_search = false;
+        Serial.println(F("Deposit complete, searching for next cup"));
+      }
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
+      break;
 
     // ========================================
     // STATE_CHECK_ZONE: ゾーン確認状態（削除 - 不要になった）
@@ -632,32 +672,33 @@ case STATE_DEPOSIT:
       robot_state.object_detected_in_search = false;
       break;
 
-// ========================================
-// STATE_AVOID: 回避状態（黒線を避ける）
-// ========================================
-case STATE_AVOID:
-  if (millis() - robot_state.state_start_time < 670) {
-    // 最初の1000ms：後退
-    motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
-  } else if (millis() - robot_state.state_start_time < 1500) {
-    // 次の2500ms：反時計回りに回転
-    // 左モーター逆転、右モーター正転
-    motor_ctrl.setSpeeds(-MOTOR_AVOID_ROT, MOTOR_AVOID_ROT);
-  } else if (millis() - robot_state.state_start_time <2670) {
-    // 次の2000ms（2秒）：前進
-    motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
-  } else {
-    // 回避完了後、探索モードへ遷移
-    motor_ctrl.stop();
-    robot_state.mode = STATE_SEARCH;
-    robot_state.search_start_time = millis();
-    robot_state.search_rotation_count = 0;
-    robot_state.object_detected_in_search = false;
-    
-    // PI制御をリセット
-    pi_ctrl.reset();
-  }
-  break;
+    // ========================================
+    // STATE_AVOID: 回避状態（黒線を避ける）
+    // ========================================
+    case STATE_AVOID:
+      if (millis() - robot_state.state_start_time < 670) {
+        // 最初の1000ms：後退
+        motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
+      } else if (millis() - robot_state.state_start_time < 1500) {
+        // 次の2500ms：反時計回りに回転
+        // 左モーター逆転、右モーター正転
+        motor_ctrl.setSpeeds(-MOTOR_AVOID_ROT, MOTOR_AVOID_ROT);
+      } else if (millis() - robot_state.state_start_time <2670) {
+        // 次の2000ms（2秒）：前進
+        motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
+      } else {
+        // 回避完了後、探索モードへ遷移
+        motor_ctrl.stop();
+        robot_state.mode = STATE_SEARCH;
+        robot_state.search_start_time = millis();
+        robot_state.search_rotation_count = 0;
+        robot_state.object_detected_in_search = false;
+        
+        // PI制御をリセット
+        pi_ctrl.reset();
+      }
+      
+      break;
 
     // ========================================
     // STATE_STOP: 停止状態
@@ -665,5 +706,30 @@ case STATE_AVOID:
     case STATE_STOP:
       motor_ctrl.stop();
       break;
+
+    // ========================================
+    // STATE_STACK: スタック検知モード
+    // ========================================
+    case STATE_STACK:
+      if (millis() - robot_state.state_start_time < 500) {
+        // 0.5秒後退
+        motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
+      } else if (millis() - robot_state.state_start_time < 1000) {
+        // 0.5秒旋回（ランダム方向）
+        if (random(0,2) == 0)
+          motor_ctrl.setSpeeds(-MOTOR_ROTATE, MOTOR_ROTATE); // 左旋回
+        else
+          motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE); // 右旋回
+      } else {
+        // 探索モードへ復帰
+        motor_ctrl.stop();
+        robot_state.mode = STATE_SEARCH;
+        robot_state.search_start_time = millis();
+        robot_state.search_rotation_count = 0;
+        robot_state.object_detected_in_search = false;
+        pi_ctrl.reset();
+      }
+      break;
   }
+  
 }

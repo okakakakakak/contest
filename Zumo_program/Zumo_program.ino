@@ -31,7 +31,7 @@ PIController pi_ctrl;                   // PI制御
 // 定数定義
 // ============================================
 float TARGET_HEADING = 210.0;       // 目標方位角（度）
-const float MAGNETIC_DECLINATION = -7.0;  // 磁気偏角（度、地域によって異なる）
+const float MAGNETIC_DECLINATION = -7.67;  // 磁気偏角（度、地域によって異なる）
 const char ROBOT_NAME[] PROGMEM = "Zumo1";  // ← ロボット名（必要に応じて変更）
 
 // ============================================
@@ -129,10 +129,10 @@ void setup() {
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'B') {
-      TARGET_HEADING = 200.0 - 180;
+      TARGET_HEADING = 210.0 - 180;
       Serial.println("GOAL_COLOR:B");  //確認送信
     } else if (c == 'R') {
-      TARGET_HEADING = 200.0 + 0.0;
+      TARGET_HEADING = 210.0 + 0.0;
       Serial.println("GOAL_COLOR:R");  //確認送信
     } else {
       Serial.print(F("Unexpected color code: "));

@@ -31,8 +31,14 @@ int buttonH = 60;
 int buttonX = 0;
 int buttonY = 0;
 
+PFont jpFont;  // ← グローバル変数として宣言
+
 void setup() {
   size(1200, 800);
+  
+  // ✅ 日本語フォントを作成して適用
+  jpFont = createFont("Meiryo", 30);  // 環境にある日本語フォント名を指定
+  textFont(jpFont);
 
   // ボタン位置を右下に設定
   buttonX = width - buttonW - 20;

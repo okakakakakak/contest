@@ -311,7 +311,7 @@ void task() {
     case STATE_SEARCH: {
       // ★ スタック検知クールダウン解除判定
       if (!robot_state.allow_stack_check &&
-          millis() - robot_state.search_start_time > 1000) {
+          millis() - robot_state.search_start_time > 2500) {
         robot_state.allow_stack_check = true;
       }
       // 物体検知ロジック：30cm未満の物体を3回検知したら静止確認へ

@@ -335,7 +335,7 @@ bool isStacked() {
 
     // 加速度変化が小さいか？（相対変化率で判定）
     static float prevNorm = 0;
-    bool accelStill = (prevNorm != 0 && abs(norm - prevNorm) / norm < 0.05); // 5%未満
+    bool accelStill = (prevNorm != 0 && abs(norm - prevNorm) / norm < 0.1); // 5%未満
     prevNorm = norm;
 
     if (motorsActive && accelStill) {

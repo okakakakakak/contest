@@ -310,7 +310,7 @@ void task() {
     case STATE_SEARCH: {
       // ★ スタック検知クールダウン解除判定
       if (!robot_state.allow_stack_check &&
-          millis() - robot_state.search_start_time > 1000) {
+          millis() - robot_state.search_start_time > 2500) {
         robot_state.allow_stack_check = true;
       }
       // 物体検知ロジック：30cm未満の物体を3回検知したら静止確認へ
@@ -418,7 +418,8 @@ void task() {
         robot_state.object_detected_in_search = false;
       }
       //// ★ スタック検知 → STACK
-      if (isStacked()) {
+      // クールダウン中なら検知しないように条件を追加
+      if (robot_state.allow_stack_check && isStacked()) {
         motor_ctrl.stop();
         robot_state.mode = STATE_STACK;
         robot_state.state_start_time = millis();
@@ -492,7 +493,8 @@ void task() {
         pi_ctrl.reset();
       }
       //// ★ スタック検知 → STACK
-      if (isStacked()) {
+      // クールダウン中なら検知しないように条件を追加
+      if (robot_state.allow_stack_check && isStacked()) {
         motor_ctrl.stop();
         robot_state.mode = STATE_STACK;
         robot_state.state_start_time = millis();
@@ -652,7 +654,8 @@ void task() {
         Serial.println(F("Deposit complete, searching for next cup"));
       }
       //// ★ スタック検知 → STACK
-      if (isStacked()) {
+      // クールダウン中なら検知しないように条件を追加
+      if (robot_state.allow_stack_check && isStacked()) {
         motor_ctrl.stop();
         robot_state.mode = STATE_STACK;
         robot_state.state_start_time = millis();
@@ -697,7 +700,8 @@ void task() {
         pi_ctrl.reset();
       }
       //// ★ スタック検知 → STACK
-      if (isStacked()) {
+      // クールダウン中なら検知しないように条件を追加
+      if (robot_state.allow_stack_check && isStacked()) {
         motor_ctrl.stop();
         robot_state.mode = STATE_STACK;
         robot_state.state_start_time = millis();

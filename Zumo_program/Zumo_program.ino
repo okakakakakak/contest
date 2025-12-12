@@ -31,7 +31,7 @@ PIController pi_ctrl;                   // PI制御
 // 定数定義
 // ============================================
 float TARGET_HEADING = 210.0;       // 目標方位角（度）
-const float MAGNETIC_DECLINATION = -7.0;  // 磁気偏角（度、地域によって異なる）
+const float MAGNETIC_DECLINATION = -7.67;  // 磁気偏角（度、地域によって異なる）
 const char ROBOT_NAME[] PROGMEM = "Zumo1";  // ← ロボット名（必要に応じて変更）
 
 // ============================================
@@ -110,8 +110,8 @@ void setup() {
   Serial.print(F("Ultrasonic..."));
   ultrasonic.init();  // ピンを設定
   Serial.println(F("OK"));
-  
-  // ========================================
+
+    // ========================================
   // ゴール色のリクエストと受信
   // ========================================
   Serial.println(F("--- Requesting Goal Color ---"));
@@ -129,18 +129,17 @@ void setup() {
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'B') {
-      TARGET_HEADING = 200.0 - 180;
+      TARGET_HEADING = 210.0 - 180;
       Serial.println("GOAL_COLOR:B");  //確認送信
     } else if (c == 'R') {
-      TARGET_HEADING = 200.0 + 0.0;
+      TARGET_HEADING = 210.0 + 0.0;
       Serial.println("GOAL_COLOR:R");  //確認送信
     } else {
       Serial.print(F("Unexpected color code: "));
       Serial.println(c);
     }
   }
-
-
+  
   // ========================================
   // コンパスキャリブレーション
   // ========================================
@@ -216,21 +215,6 @@ void loop() {
     // 最後に読み取った時刻を更新
     lastColorRead = millis();
   }
-
-  // ========================================
-  // Processingからの受信処理(セットアップ時に設定済みなので必要なし)
-  // ========================================
-  /*if (Serial.available()) {
-    char c = Serial.read();
-    if (c == 'B') {
-      TARGET_HEADING = 210.0 + 180.0;
-      Serial.println(F("Received B → Heading set to 390"));
-    } else if (c == 'R') {
-      TARGET_HEADING = 210.0 + 0.0;
-      Serial.println(F("Received R → Heading set to 210"));
-    }
-  }*/
-
 
   // ========================================
   // デバッグ：加速度Z軸の値を表示

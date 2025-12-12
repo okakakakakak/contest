@@ -31,8 +31,14 @@ int buttonH = 60;
 int buttonX = 0;
 int buttonY = 0;
 
+PFont jpFont;  // ← グローバル変数として宣言
+
 void setup() {
   size(1200, 800);
+  
+  // ✅ 日本語フォントを作成して適用
+  jpFont = createFont("Meiryo", 30);  // 環境にある日本語フォント名を指定
+  textFont(jpFont);
 
   // ボタン位置を右下に設定
   buttonX = width - buttonW - 20;
@@ -121,6 +127,7 @@ rectMode(CORNER);
   text(name2 + " Mode: " + mode2, width/2 + 20, tBaseY);
   textSize(30);
   text("Distance: " + dist2 + " cm", width/2 + 20, tBaseY + tDistY);
+  text("Goal: " + goalColor2, width/2 + 300, tBaseY + tDistY);
   text("Color: " + color2, width/2 + 20, tBaseY + tDistY * 2);
   text("Heading: " + heading2 + "°", width/2 + 20, tBaseY + tDistY * 3);
   text("Motor[L:" + motorL2 + " R:" + motorR2 + "]", width/2 + 20, tBaseY + tDistY * 4);
@@ -132,6 +139,24 @@ rectMode(CORNER);
   if (myString2 != null) {
     text("Raw: " + myString2, width/2 + 20, tBaseY + tDistY * 8);
   }
+  // === Roll / Pitch 可視化（Zumo2） ===
+pushMatrix();
+translate(width/2 + 300, 300); // Zumo2 Roll表示位置（右上）
+rotate(radians(degrees(atan2(ay2, az2))));
+fill(200, 255, 200);
+rectMode(CENTER);
+rect(0, 0, 100, 20);
+popMatrix();
+
+pushMatrix();
+translate(width/2 + 450, 300); // Zumo2 Pitch表示位置（右上）
+rotate(radians(degrees(atan2(-ax2, sqrt(ay2*ay2 + az2*az2)))));
+fill(200, 200, 255);
+rectMode(CENTER);
+rect(0, 0, 20, 100);
+popMatrix();
+  // ✅ 描画モードを元に戻す
+rectMode(CORNER);
 
   // Zumo3（左下）
   fill(0); rect(0, height/2, width/2, height/2);
@@ -139,6 +164,7 @@ rectMode(CORNER);
   text(name3 + " Mode: " + mode3, 20, height/2 + tBaseY);
   textSize(30);
   text("Distance: " + dist3 + " cm", 20, height/2 + tBaseY + tDistY);
+  text("Goal: " + goalColor3, 300, height/2 + tBaseY + tDistY);
   text("Color: " + color3, 20, height/2 + tBaseY + tDistY * 2);
   text("Heading: " + heading3 + "°", 20, height/2 + tBaseY + tDistY * 3);
   text("Motor[L:" + motorL3 + " R:" + motorR3 + "]", 20, height/2 + tBaseY + tDistY * 4);
@@ -150,6 +176,24 @@ rectMode(CORNER);
   if (myString3 != null) {
     text("Raw: " + myString3, 20, height/2 + tBaseY + tDistY * 8);
   }
+  // === Roll / Pitch 可視化（Zumo3） ===
+pushMatrix();
+translate(300, height/2 + 300); // Zumo3 Roll表示位置（左下）
+rotate(radians(degrees(atan2(ay3, az3))));
+fill(200, 255, 200);
+rectMode(CENTER);
+rect(0, 0, 100, 20);
+popMatrix();
+
+pushMatrix();
+translate(450, height/2 + 300); // Zumo3 Pitch表示位置（左下）
+rotate(radians(degrees(atan2(-ax3, sqrt(ay3*ay3 + az3*az3)))));
+fill(200, 200, 255);
+rectMode(CENTER);
+rect(0, 0, 20, 100);
+popMatrix();
+  // ✅ 描画モードを元に戻す
+rectMode(CORNER);
 
   drawButton(); // ボタン描画
 }

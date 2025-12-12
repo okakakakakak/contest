@@ -51,22 +51,24 @@
 #define STATE_CLIMB             11  // 坂道登坂モード
 #define STATE_CHECK_ZONE        12  // ゾーン確認状態（STATE_CLIMBの挿入で1つずれる）
 #define STATE_DEPOSIT           13  // 預け入れ状態（STATE_CLIMBの挿入で1つずれる）
+#define STATE_STACK             14  // スタック検知モード
+
 
 // ============================================
 // モーター速度定数
 // ============================================
 // 各状態で使用するモーター速度の基準値
-#define MOTOR_ROTATE     140   // 回転時の速度
-#define MOTOR_FORWARD    240   // 前進時の速度
-#define MOTOR_ESCAPE     240   // 脱出時の速度
-#define MOTOR_REVERSE    -140  // 後退時の速度（負の値）
-#define MOTOR_AVOID_ROT  140   // 回避時の回転速度
-#define MOTOR_MOVE       140   // 移動時の速度
+#define MOTOR_ROTATE     180   // 回転時の速度（140 → 210）
+#define MOTOR_FORWARD    210   // 前進時の速度（140 → 210）
+#define MOTOR_ESCAPE     210   // 脱出時の速度（140 → 210）
+#define MOTOR_REVERSE    -210  // 後退時の速度（-140 → -210）
+#define MOTOR_AVOID_ROT  210   // 回避時の回転速度（140 → 210）
+#define MOTOR_MOVE       210   // 移動時の速度（140 → 210）
 #define MOTOR_STOP       0     // 停止（速度0）
-#define MOTOR_TURN       120    // 💡 旋回速度の基本値 (弧を描くための前進成分)
+#define MOTOR_TURN       180   // 旋回速度の基本値（120 → 180、弧を描くための前進成分）
 
 // ============================================
-// 加速度センサー定数 
+// 加速度センサー定数
 // ============================================
 // 坂道検知に使用する加速度センサーのパラメータ
 #define ACCEL_READ_INTERVAL     50   // 加速度センサーの計測間隔 (ms)
@@ -193,7 +195,7 @@ struct UltrasonicSensor {
 };
 
 // ============================================
-// ロボット状態構造体（最適化）
+// ロボット状態構造体（登坂フェーズ追加版）
 // ============================================
 /**
  * ロボット全体の状態を管理する構造体
@@ -213,20 +215,28 @@ struct RobotState {
   unsigned long time_prev;  // 前回の時刻
   
   byte cups_delivered;  // 運搬したカップの数
+
+  // ★ スタック判定用フラグ
+  bool allow_stack_check;
+  
+  // 💡 NEW: 登坂モード用の変数
+  float climb_start_heading;   // 登坂開始時の方位角（使用しない - 予約）
+  byte climb_phase;            // 登坂のフェーズ（0:後退、1:左旋回、2:大回り、3:右旋回、4:前進、5:登坂）
   
   // コンストラクタ：初期化
   RobotState() : 
     mode(STATE_INIT), previous_mode(255),  // -1の代わりに255（byteの最大値）
     state_start_time(0), search_start_time(0),
     search_rotation_count(0), object_detected_in_search(false),
-    time_now(0), time_prev(0), cups_delivered(0) {}
+    time_now(0), time_prev(0), cups_delivered(0),
+    climb_start_heading(0), climb_phase(0) {}
   
   // 時刻を更新する関数
   void updateTime() {
     time_prev = time_now;
     time_now = millis();
   }
-};;
+};
 
 // ============================================
 // モーター制御構造体
@@ -285,9 +295,9 @@ void printStatus();                       // ステータスを表示
 void task();                              // メインタスク（状態遷移）
 float turnTo(float target_heading);       // 目標方位に旋回（PI制御）
 void calibrationCompassAdvanced();        // コンパスキャリブレーション
-bool isSlopeDetected();                   // 💡 NEW: 傾斜検知
-bool hasReachedTop();                     // 💡 NEW: 登頂判定
-void runClimbMode();                      // 💡 NEW: 登坂モード実行
-void calibrateAccelZOffset();             // 💡 NEW: Z軸オフセットキャリブレーション
+bool isSlopeDetected();                   // 傾斜検知
+bool hasReachedTop();                     // 登頂判定
+void runClimbMode();                      // 登坂モード実行
+void calibrateAccelZOffset();             // Z軸オフセットキャリブレーション
 
 #endif

@@ -81,7 +81,7 @@ void ColorSensorState::calibrate() {
   Serial.println(F("Calibrating..."));
   
   // キャリブレーション中は低速で前進
-  motor_ctrl.setSpeeds(60, 60);
+  motor_ctrl.setSpeeds(90, 90);
 
   // 最小値を最大値で初期化（後で小さい値で上書き）
   r_min = 65535;
@@ -315,6 +315,44 @@ static void updateMinMax(int x, int y, float& mx_min, float& mx_max, float& my_m
   if (y < my_min) my_min = y;
   if (y > my_max) my_max = y;
 }
+// ============================================
+// Stack検知関数（加速度センサー利用）
+// ============================================
+bool isStacked() {
+  static unsigned long lastCheck = 0;
+  static int stillCount = 0;
+
+  if (millis() - lastCheck > 200) {
+    compass_state.compass.readAcc();
+    float ax = compass_state.compass.a.x;
+    float ay = compass_state.compass.a.y;
+    float az = compass_state.compass.a.z;
+
+    float norm = sqrt(ax*ax + ay*ay + az*az);
+
+    // モーターが動いているか？
+    bool motorsActive = (abs(motor_ctrl.left_speed) > 30 || abs(motor_ctrl.right_speed) > 30);
+
+    // 加速度変化が小さいか？（相対変化率で判定）
+    static float prevNorm = 0;
+    bool accelStill = (prevNorm != 0 && abs(norm - prevNorm) / norm < 0.05); // 5%未満
+    prevNorm = norm;
+
+    if (motorsActive && accelStill) {
+      stillCount++;
+    } else {
+      // リセットせず「減算」にすることでノイズに強くする
+      if (stillCount > 0) stillCount--;
+    }
+
+    lastCheck = millis();
+  }
+
+  return (stillCount >= 5); // 約1秒間「ほぼ動きなし」でスタック判定
+}
+
+
+
 
 /**
  * 地磁気センサーのキャリブレーションを行う関数
@@ -326,14 +364,14 @@ void calibrationCompassAdvanced() {
   float mx_max = -32768, my_max = -32768;  // 最大値を最小値で初期化
   float mx_min = 32767, my_min = 32767;    // 最小値を最大値で初期化
   
-  Serial.println(F("Rotating 15s..."));
+  Serial.println(F("Rotating 10s..."));
   
   unsigned long startTime = millis();
   
   // ========================================
-  // フェーズ1: 時計回りに5秒間回転
+  // フェーズ1: 時計回りに3.3秒間回転
   // ========================================
-  while (millis() - startTime < 5000) {
+  while (millis() - startTime < 3300) {
     // 地磁気を読み取る
     compass_state.compass.read();
     
@@ -342,33 +380,33 @@ void calibrationCompassAdvanced() {
                  mx_min, mx_max, my_min, my_max);
     
     // 時計回りに回転（左モーター正転、右モーター逆転）
-    motor_ctrl.setSpeeds(120, -120);
+    motor_ctrl.setSpeeds(180, -180);
     delay(20);
   }
   
   // ========================================
-  // フェーズ2: 反時計回りに5秒間回転
+  // フェーズ2: 反時計回りに3.3秒間回転
   // ========================================
   startTime = millis();
-  while (millis() - startTime < 5000) {
+  while (millis() - startTime < 3300) {
     compass_state.compass.read();
     updateMinMax(compass_state.compass.m.x, compass_state.compass.m.y,
                  mx_min, mx_max, my_min, my_max);
     
     // 反時計回りに回転（左モーター逆転、右モーター正転）
-    motor_ctrl.setSpeeds(-120, 120);
+    motor_ctrl.setSpeeds(-180, 180);
     delay(20);
   }
   
   // ========================================
-  // フェーズ3: 再度時計回りに5秒間回転
+  // フェーズ3: 再度時計回りに3.3秒間回転
   // ========================================
   startTime = millis();
-  while (millis() - startTime < 5000) {
+  while (millis() - startTime < 3300) {
     compass_state.compass.read();
     updateMinMax(compass_state.compass.m.x, compass_state.compass.m.y,
                  mx_min, mx_max, my_min, my_max);
-    motor_ctrl.setSpeeds(120, -120);
+    motor_ctrl.setSpeeds(180, -180);
     delay(20);
   }
   

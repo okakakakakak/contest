@@ -36,7 +36,9 @@ const char str_move[] PROGMEM = "MOVE";
 const char str_climb[] PROGMEM = "CLIMB";
 const char str_check_zone[] PROGMEM = "CHECK_ZONE";
 const char str_deposit[] PROGMEM = "DEPOSIT";
+const char str_stack[] PROGMEM = "STACK";
 const char str_unknown[] PROGMEM = "UNKNOWN";
+
 
 // モード名の配列（プログラムメモリに格納）
 const char* const mode_names[] PROGMEM = {
@@ -44,7 +46,8 @@ const char* const mode_names[] PROGMEM = {
   str_wait, str_escape, str_avoid, str_stop, str_move,
   str_climb,
   str_check_zone, 
-  str_deposit
+  str_deposit,
+  str_stack 
 };
 
 /**
@@ -54,7 +57,7 @@ const char* const mode_names[] PROGMEM = {
  * @param mode モード番号
  */
 void printModeName(byte mode) {
-  if (mode < 14) {
+  if (mode < 15) {
     // プログラムメモリから文字列をバッファにコピー
     char buffer[20];
     strcpy_P(buffer, (char*)pgm_read_word(&(mode_names[mode])));
@@ -187,6 +190,8 @@ void task() {
   // ========================================
   // 初期処理
   // ========================================
+  // 💡 常に方位角を更新
+  compass_state.updateHeading(MAGNETIC_DECLINATION);
   robot_state.updateTime();  // 時刻を更新
   printModeChange();         // モード変更を表示
   
@@ -254,8 +259,8 @@ void task() {
           
         // 制御入力 u を使って左右のモーター速度を計算
         // 弧を描く旋回: (基本速度 + 制御) / (基本速度 - 制御)
-        int left = constrain(MOTOR_TURN + u * 0.5, 0, 130);
-        int right = constrain(MOTOR_TURN - u * 0.5, 0, 130);
+        int left = constrain(MOTOR_TURN + u * 0.5, 0, 250);
+        int right = constrain(MOTOR_TURN - u * 0.5, 0, 250);
           
         // 💡 旋回完了判定（誤差5度未満）
         if (abs(u) < 2 || abs(heading_error) < 5.0) {
@@ -266,8 +271,8 @@ void task() {
           
         motor_ctrl.setSpeeds(left, right);
           
-        // タイムアウト（5秒）したら強制的に直進ステップへ
-        if (millis() - robot_state.state_start_time > 5000) {
+        // タイムアウト（3.3秒）したら強制的に直進ステップへ
+        if (millis() - robot_state.state_start_time > 3300) {
             motor_ctrl.stop();
             straight_start_time = millis();
         }
@@ -275,9 +280,9 @@ void task() {
     }
       
     // ========================================
-    // サブステップ 2: 直進（2秒間）
+    // サブステップ 2: 直進（1.3秒間）
     // ========================================
-    if (millis() - straight_start_time < 2000) {
+    if (millis() - straight_start_time < 1300) {
         // 2秒間前進
         motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE); 
         break;
@@ -303,8 +308,13 @@ void task() {
     // STATE_SEARCH: 探索状態
     // ========================================
     case STATE_SEARCH: {
+      // ★ スタック検知クールダウン解除判定
+      if (!robot_state.allow_stack_check &&
+          millis() - robot_state.search_start_time > 1000) {
+        robot_state.allow_stack_check = true;
+      }
       // 物体検知ロジック：30cm未満の物体を3回検知したら静止確認へ
-      if (dist > 0 && dist < 30) {
+      if (dist > 0 && dist < 40) {
         // 初めて物体を検知した場合
         if (!robot_state.object_detected_in_search) {
           robot_state.object_detected_in_search = true;
@@ -336,7 +346,7 @@ void task() {
       
       // 💡 修正箇所：時間が短くなる問題を防ぐためのロジック
       // 探索開始からの経過時間で STATE_MOVE に遷移
-      if (millis() - robot_state.search_start_time > 5000) {
+      if (millis() - robot_state.search_start_time > 3300) {
         // 5秒経過したら移動モードへ
         // 🚨 意図しないリセットを防ぐため、オブジェクト検知フラグも確認
         motor_ctrl.stop();
@@ -347,6 +357,15 @@ void task() {
         robot_state.search_rotation_count = 0;
         robot_state.object_detected_in_search = false;
       }
+      //// ★ スタック検知 → STACK
+      // スタック判定はフラグがtrueのときだけ
+      if (robot_state.allow_stack_check && isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
+
       break;
     }
 
@@ -357,12 +376,22 @@ void task() {
       // 前進
       motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE);
       
-      // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
+      // 💡 修正: 傾斜検知による STATE_CLIMB への遷移
       if (isSlopeDetected()) {
         motor_ctrl.stop();
+        
+        // 💡 NEW: 開始方位を記録
+        compass_state.updateHeading(MAGNETIC_DECLINATION);
+        robot_state.climb_start_heading = compass_state.current_heading;
+        robot_state.climb_phase = 0;  // 円弧旋回フェーズから開始
+        
         robot_state.mode = STATE_CLIMB;
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
+        
+        Serial.print(F("Climb started at heading: "));
+        Serial.println(robot_state.climb_start_heading, 1);
+        
         break;
       }
 
@@ -381,13 +410,21 @@ void task() {
         robot_state.object_detected_in_search = false;
       } 
       // 2秒経過したら探索モードへ
-      else if (millis() - robot_state.state_start_time > 2000) {
+      else if (millis() - robot_state.state_start_time > 1300) {
         motor_ctrl.stop();
         robot_state.mode = STATE_SEARCH;
         robot_state.search_start_time = millis();
         robot_state.search_rotation_count = 0;
         robot_state.object_detected_in_search = false;
       }
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
+
       break;
 
     // ========================================
@@ -428,6 +465,23 @@ void task() {
       break;
       }
 
+      // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
+      if (isSlopeDetected()) {
+        motor_ctrl.stop();
+        
+        // 開始方位を記録
+        compass_state.updateHeading(MAGNETIC_DECLINATION);
+        robot_state.climb_start_heading = compass_state.current_heading;
+        robot_state.climb_phase = 0;  // 円弧旋回フェーズから開始
+        
+        robot_state.mode = STATE_CLIMB;
+        robot_state.state_start_time = millis();
+        pi_ctrl.reset();
+        
+        Serial.println(F("Slope detected during APPROACH, switching to CLIMB"));
+        break;
+      }
+
       // 前進
       motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
       
@@ -437,10 +491,17 @@ void task() {
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
       }
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
       break;
 
     // ========================================
-    // STATE_TURN_TO_TARGET: 目標方位へ旋回状態 //
+    // STATE_TURN_TO_TARGET: 目標方位へ旋回状態
     // ========================================
     case STATE_TURN_TO_TARGET: {
       // 最初の100msは停止（旋回開始前の安定化）
@@ -476,8 +537,8 @@ void task() {
         int right = -u * speed_factor;
         
         // 速度を制限
-        left = constrain(left, -130, 130);
-        right = constrain(right, -130, 130);
+        left = constrain(left, -195, 195);
+        right = constrain(right, -195, 195);
         
         motor_ctrl.setSpeeds(left, right);
       }
@@ -560,37 +621,44 @@ void task() {
       int right = MOTOR_ESCAPE - control_u * 0.3;
       
       // 速度を制限
-      left = constrain(left, -200, 200);
-      right = constrain(right, -200, 200);
+      left = constrain(left, -210, 210);
+      right = constrain(right, -210, 210);
       
       motor_ctrl.setSpeeds(left, right);
       break;
     }
 
-// ========================================
-// STATE_DEPOSIT: 預け入れ動作状態（1秒後退 + 半回転 + 3秒前進）
-// ========================================
-case STATE_DEPOSIT:
-  if (millis() - robot_state.state_start_time < 1000) {
-    // 最初の1秒間：後退
-    motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
-  } else if (millis() - robot_state.state_start_time < 2500) {
-    // 次の1.5秒間：半回転（180度）
-    // 左モーター正転、右モーター逆転で時計回り
-    motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
-  } else if (millis() - robot_state.state_start_time < 5500) {
-    // 次の3秒間：前進
-    motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
-  } else {
-    // 完了したら探索モードへ
-    motor_ctrl.stop();
-    robot_state.mode = STATE_SEARCH;
-    robot_state.search_start_time = millis();
-    robot_state.search_rotation_count = 0;
-    robot_state.object_detected_in_search = false;
-    Serial.println(F("Deposit complete, searching for next cup"));
-  }
-  break;
+    // ========================================
+    // STATE_DEPOSIT: 預け入れ動作状態（1秒後退 + 半回転 + 3秒前進）
+    // ========================================
+    case STATE_DEPOSIT:
+      if (millis() - robot_state.state_start_time < 670) {
+        // 最初の1秒間：後退
+        motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
+      } else if (millis() - robot_state.state_start_time < 1500) {
+        // 次の1.5秒間：半回転（180度）
+        // 左モーター正転、右モーター逆転で時計回り
+        motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
+      } else if (millis() - robot_state.state_start_time < 3670) {
+        // 次の3秒間：前進
+        motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
+      } else {
+        // 完了したら探索モードへ
+        motor_ctrl.stop();
+        robot_state.mode = STATE_SEARCH;
+        robot_state.search_start_time = millis();
+        robot_state.search_rotation_count = 0;
+        robot_state.object_detected_in_search = false;
+        Serial.println(F("Deposit complete, searching for next cup"));
+      }
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
+      break;
 
     // ========================================
     // STATE_CHECK_ZONE: ゾーン確認状態（削除 - 不要になった）
@@ -603,32 +671,39 @@ case STATE_DEPOSIT:
       robot_state.object_detected_in_search = false;
       break;
 
-// ========================================
-// STATE_AVOID: 回避状態（黒線を避ける）
-// ========================================
-case STATE_AVOID:
-  if (millis() - robot_state.state_start_time < 1000) {
-    // 最初の1000ms：後退
-    motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
-  } else if (millis() - robot_state.state_start_time < 2500) {
-    // 次の2500ms：反時計回りに回転
-    // 左モーター逆転、右モーター正転
-    motor_ctrl.setSpeeds(-MOTOR_AVOID_ROT, MOTOR_AVOID_ROT);
-  } else if (millis() - robot_state.state_start_time < 4000) {
-    // 次の2000ms（2秒）：前進
-    motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
-  } else {
-    // 回避完了後、探索モードへ遷移
-    motor_ctrl.stop();
-    robot_state.mode = STATE_SEARCH;
-    robot_state.search_start_time = millis();
-    robot_state.search_rotation_count = 0;
-    robot_state.object_detected_in_search = false;
-    
-    // PI制御をリセット
-    pi_ctrl.reset();
-  }
-  break;
+    // ========================================
+    // STATE_AVOID: 回避状態（黒線を避ける）
+    // ========================================
+    case STATE_AVOID:
+      if (millis() - robot_state.state_start_time < 670) {
+        // 最初の1000ms：後退
+        motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
+      } else if (millis() - robot_state.state_start_time < 1500) {
+        // 次の2500ms：反時計回りに回転
+        // 左モーター逆転、右モーター正転
+        motor_ctrl.setSpeeds(-MOTOR_AVOID_ROT, MOTOR_AVOID_ROT);
+      } else if (millis() - robot_state.state_start_time <2670) {
+        // 次の2000ms（2秒）：前進
+        motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
+      } else {
+        // 回避完了後、探索モードへ遷移
+        motor_ctrl.stop();
+        robot_state.mode = STATE_SEARCH;
+        robot_state.search_start_time = millis();
+        robot_state.search_rotation_count = 0;
+        robot_state.object_detected_in_search = false;
+        
+        // PI制御をリセット
+        pi_ctrl.reset();
+      }
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
+      break;
 
     // ========================================
     // STATE_STOP: 停止状態
@@ -636,5 +711,32 @@ case STATE_AVOID:
     case STATE_STOP:
       motor_ctrl.stop();
       break;
+
+    // ========================================
+    // STATE_STACK: スタック検知モード
+    // ========================================
+    case STATE_STACK:
+      if (millis() - robot_state.state_start_time < 500) {
+        // 0.5秒後退
+        motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
+      } else if (millis() - robot_state.state_start_time < 1000) {
+        // 0.5秒旋回（ランダム方向）
+        if (random(0,2) == 0)
+          motor_ctrl.setSpeeds(-MOTOR_ROTATE, MOTOR_ROTATE); // 左旋回
+        else
+          motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE); // 右旋回
+      } else {
+        // 探索モードへ復帰
+        motor_ctrl.setSpeeds(MOTOR_FORWARD/3, MOTOR_FORWARD/3); // 停止ではなく低速前進
+        robot_state.mode = STATE_SEARCH;
+        robot_state.search_start_time = millis();
+        robot_state.search_rotation_count = 0;
+        robot_state.object_detected_in_search = false;
+        pi_ctrl.reset();
+        // ★ クールダウン開始
+        robot_state.allow_stack_check = false;
+      }
+      break;
   }
+  
 }

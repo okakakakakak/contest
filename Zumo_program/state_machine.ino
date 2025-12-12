@@ -234,6 +234,7 @@ void task() {
       color_sensor.current_color == COLOR_BLUE) {
       robot_state.mode = STATE_AVOID;
       robot_state.state_start_time = millis();
+      break; // ここでbreakしないと下の処理が走る可能性があるため
       }
       
     // ========================================
@@ -310,7 +311,7 @@ void task() {
     case STATE_SEARCH: {
       // ★ スタック検知クールダウン解除判定
       if (!robot_state.allow_stack_check &&
-          millis() - robot_state.search_start_time > 2500) {
+          millis() - robot_state.search_start_time > 1000) {
         robot_state.allow_stack_check = true;
       }
       // 物体検知ロジック：30cm未満の物体を3回検知したら静止確認へ
@@ -434,6 +435,16 @@ void task() {
     case STATE_CLIMB:
       // climb_control.ino の関数を呼び出し
       runClimbMode();
+
+      // ★ スタック検知（追加）
+      // 坂道中でも完全に動けなくなった場合は脱出を試みる
+      if (robot_state.allow_stack_check && isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        // climb変数のリセットが必要ならここで行う
+        robot_state.climb_phase = 0; 
+      }
       break;
       
     // ========================================
@@ -559,6 +570,14 @@ void task() {
         robot_state.mode = STATE_WAIT_AFTER_TURN;
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
+        break;
+      }
+      // ★ スタック検知（追加）
+      // 旋回中に壁に引っかかることも多いため重要
+      if (robot_state.allow_stack_check && isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
       }
       break;
     }

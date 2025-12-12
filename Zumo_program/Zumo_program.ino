@@ -75,7 +75,7 @@ void setup() {
   delay(1500);  // シリアル通信の安定化を待つ
 
   // バージョン情報を表示
-  Serial.println(F("\n=== Zumo v3.1 ==="));
+  Serial.println(F("\n=== Zumo v3.2 ==="));
   
   // ========================================
   // カラーセンサーの初期化
@@ -151,25 +151,19 @@ void setup() {
   Serial.println(F("Done!"));
 
   //キャリブレーション後の現在の方位をTRAGET_HEADINGに設定
-  //ロボットを最初に前進する方向に向ける
+  //ロボットを自分のゴールの方向に向ける
   Serial.println(F("--- Setting TARGET_HEADING ---"));
-  compass_state.updateHeading(MAGNETIC_DECLINATION);
   waitForButtonPress();  // ボタンが押されるまで待機
+
+  //ボタンが押された瞬間の向きを取得して設定
+  compass_state.updateHeading(MAGNETIC_DECLINATION);
+  for(int i=0; i<10; i++) {
+    compass_state.updateHeading(MAGNETIC_DECLINATION);
+    delay(10);
+  }
   TARGET_HEADING = compass_state.current_heading;
   Serial.print(F("TARGET_HEADING set to: "));
   Serial.println(TARGET_HEADING, 1);
-
-  // ========================================
-  // 💡 NEW: Z軸オフセットキャリブレーション
-  // ========================================
-  /*
-  Serial.println(F("--- Accel Z Calib ---"));
-  Serial.println(F("Place robot on a level surface. Press button."));
-  waitForButtonPress();  // ボタンが押されるまで待機
-  calibrateAccelZOffset();  // Z軸オフセットを計算
-  Serial.println(F("Done! Z-Offset: "));
-  Serial.println(ACCEL_Z_OFFSET);  // オフセット値を表示
-  */
 
   // ========================================
   // カラーキャリブレーション

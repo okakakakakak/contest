@@ -30,9 +30,9 @@ PIController pi_ctrl;                   // PI制御
 // ============================================
 // 定数定義
 // ============================================
-float TARGET_HEADING = 210.0;       // 目標方位角（度）
+float TARGET_HEADING = 0.0;       // 目標方位角（度）
 const float MAGNETIC_DECLINATION = -7.67;  // 磁気偏角（度、地域によって異なる）
-const char ROBOT_NAME[] PROGMEM = "Zumo1";  // ← ロボット名（必要に応じて変更）
+const char ROBOT_NAME[] PROGMEM = "oka";  // ← ロボット名（必要に応じて変更）
 
 // ============================================
 // ボタン待機関数（簡略版）
@@ -126,6 +126,7 @@ void setup() {
     delay(10);
   }
 
+/*
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'B') {
@@ -139,6 +140,7 @@ void setup() {
       Serial.println(c);
     }
   }
+  */
   
   // ========================================
   // コンパスキャリブレーション
@@ -147,6 +149,15 @@ void setup() {
   waitForButtonPress();  // ボタンが押されるまで待機
   calibrationCompassAdvanced();  // キャリブレーション実行（15秒間回転）
   Serial.println(F("Done!"));
+
+  //キャリブレーション後の現在の方位をTRAGET_HEADINGに設定
+  //ロボットを最初に前進する方向に向ける
+  Serial.println(F("--- Setting TARGET_HEADING ---"));
+  compass_state.updateHeading(MAGNETIC_DECLINATION);
+  waitForButtonPress();  // ボタンが押されるまで待機
+  TARGET_HEADING = compass_state.current_heading;
+  Serial.print(F("TARGET_HEADING set to: "));
+  Serial.println(TARGET_HEADING, 1);
 
   // ========================================
   // 💡 NEW: Z軸オフセットキャリブレーション
@@ -181,7 +192,7 @@ void setup() {
   Serial.println(F("Running..."));
 
   // 機体名を送信（追加）
-  Serial.println("NAME:AAAA");
+  Serial.println("NAME:oka");
 
 }
 

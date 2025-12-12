@@ -83,10 +83,12 @@ void draw() {
   }
   rect(width/2, height/2, width/2, height/2);
 
+  // ==========================================
   // Zumo1（左上）
+  // ==========================================
   fill(0); rect(0, 0, width/2, height/2);
   fill(255); textSize(40);
-  text(name1 + " Mode: " + mode1, 20, tBaseY);
+  text(name1 + " Mode: " + toJapaneseMode(mode1), 20, tBaseY);
   textSize(30);
   text("Distance: " + dist1 + " cm", 20, tBaseY + tDistY);
   text("Goal: " + goalColor1, 300, tBaseY + tDistY);
@@ -121,10 +123,12 @@ void draw() {
 rectMode(CORNER);
 
 
+// ==========================================
   // Zumo2（右上）
+  // ==========================================
   fill(0); rect(width/2, 0, width/2, height/2);
   fill(255); textSize(40);
-  text(name2 + " Mode: " + mode2, width/2 + 20, tBaseY);
+  text(name2 + " Mode: " + toJapaneseMode(mode2), width/2 + 20, tBaseY);
   textSize(30);
   text("Distance: " + dist2 + " cm", width/2 + 20, tBaseY + tDistY);
   text("Goal: " + goalColor2, width/2 + 300, tBaseY + tDistY);
@@ -158,10 +162,12 @@ popMatrix();
   // ✅ 描画モードを元に戻す
 rectMode(CORNER);
 
+ // ==========================================
   // Zumo3（左下）
+  // ==========================================
   fill(0); rect(0, height/2, width/2, height/2);
   fill(255); textSize(40);
-  text(name3 + " Mode: " + mode3, 20, height/2 + tBaseY);
+  text(name3 + " Mode: " + toJapaneseMode(mode3), 20, height/2 + tBaseY);
   textSize(30);
   text("Distance: " + dist3 + " cm", 20, height/2 + tBaseY + tDistY);
   text("Goal: " + goalColor3, 300, height/2 + tBaseY + tDistY);
@@ -302,4 +308,30 @@ void serialEvent(Serial p) {
       else if (p == port3) myString3 = incoming;
     }
   }
+}
+
+// ==================================================
+// ★追加: モード名を日本語に変換する関数
+// ==================================================
+String toJapaneseMode(String modeName) {
+  if (modeName == null) return "不明";
+  
+  // Arduinoコード定義に合わせて翻訳
+  if (modeName.equals("INIT"))           return "初期化";
+  if (modeName.equals("DIRECTION"))      return "方向調整";
+  if (modeName.equals("SEARCH"))         return "探索中";
+  if (modeName.equals("CHECK_STATIC"))   return "静止確認";
+  if (modeName.equals("APPROACH"))       return "接近中";
+  if (modeName.equals("TURN_TO_TARGET")) return "旋回中";
+  if (modeName.equals("WAIT_AFTER_TURN"))return "待機";
+  if (modeName.equals("ESCAPE"))         return "運搬(帰還)";
+  if (modeName.equals("AVOID"))          return "回避行動";
+  if (modeName.equals("STOP"))           return "停止";
+  if (modeName.equals("MOVE"))           return "移動中";
+  if (modeName.equals("CLIMB"))          return "登坂中";
+  if (modeName.equals("DEPOSIT"))        return "ゴール";
+  if (modeName.equals("STACK"))          return "スタック脱出";
+  if (modeName.equals("CHECK_ZONE"))     return "ゾーン確認";
+  
+  return modeName; // 定義されていないものはそのまま表示
 }

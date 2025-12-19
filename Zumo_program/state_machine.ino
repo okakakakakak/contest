@@ -234,6 +234,7 @@ void task() {
       color_sensor.current_color == COLOR_BLUE) {
       robot_state.mode = STATE_AVOID;
       robot_state.state_start_time = millis();
+      break; // ここでbreakしないと下の処理が走る可能性があるため
       }
       
     // ========================================
@@ -379,6 +380,15 @@ void task() {
     case STATE_MOVE:
       // 前進
       motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE);
+
+      //// ★ スタック検知 → STACK
+      // クールダウン中なら検知しないように条件を追加
+      if (robot_state.allow_stack_check && isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
       
       // 💡 修正: 傾斜検知による STATE_CLIMB への遷移
       if (isSlopeDetected()) {
@@ -439,6 +449,16 @@ void task() {
     case STATE_CLIMB:
       // climb_control.ino の関数を呼び出し
       runClimbMode();
+
+      // ★ スタック検知（追加）
+      // 坂道中でも完全に動けなくなった場合は脱出を試みる
+      if (robot_state.allow_stack_check && isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        // climb変数のリセットが必要ならここで行う
+        robot_state.climb_phase = 0; 
+      }
       break;
       
     // ========================================
@@ -469,6 +489,14 @@ void task() {
       robot_state.mode = STATE_AVOID;
       robot_state.state_start_time = millis();
       break;
+      }
+      //// ★ スタック検知 → STACK
+      // クールダウン中なら検知しないように条件を追加
+      if (robot_state.allow_stack_check && isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
       }
 
       // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
@@ -565,6 +593,14 @@ void task() {
         robot_state.mode = STATE_WAIT_AFTER_TURN;
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
+        break;
+      }
+      // ★ スタック検知（追加）
+      // 旋回中に壁に引っかかることも多いため重要
+      if (robot_state.allow_stack_check && isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
       }
       break;
     }
@@ -661,7 +697,8 @@ void task() {
       }
       /*
       //// ★ スタック検知 → STACK
-      if (isStacked()) {
+      // クールダウン中なら検知しないように条件を追加
+      if (robot_state.allow_stack_check && isStacked()) {
         motor_ctrl.stop();
         robot_state.mode = STATE_STACK;
         robot_state.state_start_time = millis();
@@ -708,7 +745,8 @@ void task() {
       }
       /*
       //// ★ スタック検知 → STACK
-      if (isStacked()) {
+      // クールダウン中なら検知しないように条件を追加
+      if (robot_state.allow_stack_check && isStacked()) {
         motor_ctrl.stop();
         robot_state.mode = STATE_STACK;
         robot_state.state_start_time = millis();

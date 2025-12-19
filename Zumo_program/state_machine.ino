@@ -282,11 +282,13 @@ void task() {
     // ========================================
     // サブステップ 2: 直進（1.3秒間）
     // ========================================
+    /*
     if (millis() - straight_start_time < 1300) {
         // 2秒間前進
         motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE); 
         break;
     }
+    */
 
     // ========================================
     // サブステップ 3: 完了
@@ -357,6 +359,7 @@ void task() {
         robot_state.search_rotation_count = 0;
         robot_state.object_detected_in_search = false;
       }
+      /*
       //// ★ スタック検知 → STACK
       // スタック判定はフラグがtrueのときだけ
       if (robot_state.allow_stack_check && isStacked()) {
@@ -365,6 +368,7 @@ void task() {
         robot_state.state_start_time = millis();
         break;
       }
+      */
 
       break;
     }
@@ -417,6 +421,7 @@ void task() {
         robot_state.search_rotation_count = 0;
         robot_state.object_detected_in_search = false;
       }
+      /*
       //// ★ スタック検知 → STACK
       if (isStacked()) {
         motor_ctrl.stop();
@@ -424,6 +429,7 @@ void task() {
         robot_state.state_start_time = millis();
         break;
       }
+      */
 
       break;
 
@@ -491,6 +497,7 @@ void task() {
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
       }
+      /*
       //// ★ スタック検知 → STACK
       if (isStacked()) {
         motor_ctrl.stop();
@@ -498,6 +505,7 @@ void task() {
         robot_state.state_start_time = millis();
         break;
       }
+      */
       break;
 
     // ========================================
@@ -651,6 +659,7 @@ void task() {
         robot_state.object_detected_in_search = false;
         Serial.println(F("Deposit complete, searching for next cup"));
       }
+      /*
       //// ★ スタック検知 → STACK
       if (isStacked()) {
         motor_ctrl.stop();
@@ -658,6 +667,7 @@ void task() {
         robot_state.state_start_time = millis();
         break;
       }
+      */
       break;
 
     // ========================================
@@ -696,6 +706,7 @@ void task() {
         // PI制御をリセット
         pi_ctrl.reset();
       }
+      /*
       //// ★ スタック検知 → STACK
       if (isStacked()) {
         motor_ctrl.stop();
@@ -703,6 +714,7 @@ void task() {
         robot_state.state_start_time = millis();
         break;
       }
+      */
       break;
 
     // ========================================
@@ -712,6 +724,7 @@ void task() {
       motor_ctrl.stop();
       break;
 
+/*
     // ========================================
     // STATE_STACK: スタック検知モード
     // ========================================
@@ -737,6 +750,6 @@ void task() {
         robot_state.allow_stack_check = false;
       }
       break;
+      */
   }
-  
 }

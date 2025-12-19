@@ -58,11 +58,11 @@
 // モーター速度定数
 // ============================================
 // 各状態で使用するモーター速度の基準値
-#define MOTOR_ROTATE     180   // 回転時の速度（140 → 210）
+#define MOTOR_ROTATE     100   // 回転時の速度（140 → 210）
 #define MOTOR_FORWARD    210   // 前進時の速度（140 → 210）
 #define MOTOR_ESCAPE     210   // 脱出時の速度（140 → 210）
 #define MOTOR_REVERSE    -210  // 後退時の速度（-140 → -210）
-#define MOTOR_AVOID_ROT  210   // 回避時の回転速度（140 → 210）
+#define MOTOR_AVOID_ROT  140   // 回避時の回転速度（140 → 210）
 #define MOTOR_MOVE       210   // 移動時の速度（140 → 210）
 #define MOTOR_STOP       0     // 停止（速度0）
 #define MOTOR_TURN       180   // 旋回速度の基本値（120 → 180、弧を描くための前進成分）

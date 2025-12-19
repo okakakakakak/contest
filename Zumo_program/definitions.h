@@ -52,6 +52,7 @@
 #define STATE_CHECK_ZONE        12  // ゾーン確認状態（STATE_CLIMBの挿入で1つずれる）
 #define STATE_DEPOSIT           13  // 預け入れ状態（STATE_CLIMBの挿入で1つずれる）
 #define STATE_STACK             14  // スタック検知モード
+#define STATE_CARRY_AVOID       15  // 運搬時回避
 
 
 // ============================================

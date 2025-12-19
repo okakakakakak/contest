@@ -142,20 +142,19 @@ bool hasReachedTop() {
 }
 
 // ============================================
-// 坂道登坂モードの実行（後退→大回り→登坂→頂上→下山）
+// 坂道登坂モードの実行
+// 修正: Phase 2で「敵陣（自ゴールの反対）」を向く
 // ============================================
 void runClimbMode() {
   static unsigned long lastAccelRead = 0;
   static float current_roll = 0.0;
-  static float roll_integral = 0.0;  // ロール角の積分項
-  static unsigned long phase_start_time = 0; // 各フェーズの開始時刻
+  static float roll_integral = 0.0;
+  static unsigned long phase_start_time = 0;
+  static float phase_start_heading = 0.0;
   
-  // 超音波センサーで前方の距離を計測
   int dist = ultrasonic.getDistance();
 
-  // ========================================
-  // 終了条件: 黒線を検出したら即時停止（フェーズ問わず）
-  // ========================================
+  // 黒線検知時は即停止・回避
   if (color_sensor.current_color == COLOR_BLACK) {
     motor_ctrl.stop();
     robot_state.mode = STATE_AVOID;
@@ -167,12 +166,12 @@ void runClimbMode() {
   }
   
   // ========================================
-  // フェーズ0: 0.5秒後退
+  // フェーズ0: 0.25秒後退
   // ========================================
   if (robot_state.climb_phase == 0) {
     if (phase_start_time == 0) {
       phase_start_time = millis();
-      Serial.println(F("CLIMB Phase 0: Reversing"));
+      Serial.println(F("CLIMB Ph0: Reversing"));
     }
     
     if (millis() - phase_start_time > 250) {
@@ -187,90 +186,119 @@ void runClimbMode() {
   }
   
   // ========================================
-  // フェーズ1: 左に0.5秒旋回
+  // フェーズ1: 左に90度旋回
   // ========================================
   if (robot_state.climb_phase == 1) {
-    if (phase_start_time == 0) phase_start_time = millis();
+    if (phase_start_time == 0) {
+      phase_start_time = millis();
+      compass_state.updateHeading(MAGNETIC_DECLINATION);
+      phase_start_heading = compass_state.current_heading;
+      Serial.println(F("CLIMB Ph1: Left 90"));
+    }
     
-    if (millis() - phase_start_time > 350) {
+    float current = compass_state.current_heading;
+    float diff = abs(current - phase_start_heading);
+    if (diff > 180.0) diff = 360.0 - diff;
+
+    // 90度回ったら次へ
+    if (diff >= 90.0) {
       motor_ctrl.stop();
       delay(200);
       robot_state.climb_phase = 2;
       phase_start_time = 0;
-      Serial.println(F("CLIMB Phase 2: Big turn"));
       return;
     }
+    
+    // 左旋回
     motor_ctrl.setSpeeds(-MOTOR_AVOID_ROT, MOTOR_AVOID_ROT);
+    
+    // タイムアウト
+    if (millis() - phase_start_time > 10000) {
+       motor_ctrl.stop();
+       robot_state.climb_phase = 2;
+       phase_start_time = 0;
+    }
     return;
   }
   
-  /*
   // ========================================
-  // フェーズ2: 5秒間平地で大きく右旋回
+  // フェーズ2: 敵陣（自ゴールの反対）を向くまで右カーブ
   // ========================================
   if (robot_state.climb_phase == 2) {
-    if (phase_start_time == 0) phase_start_time = millis();
-    
-    if (millis() - phase_start_time > 5000) {
-      motor_ctrl.stop();
-      robot_state.climb_phase = 3;
-      phase_start_time = 0;
-      return;
-    }
-    motor_ctrl.setSpeeds(200, 105);
-    return;
-  }*/
-// フェーズ2: ふもとを大きく右旋回し、機体の右側がTARGET_HEADINGを向いたら次へ
-if (robot_state.climb_phase == 2) {
     if (phase_start_time == 0) {
         phase_start_time = millis();
-        Serial.println(F("CLIMB Phase 2: Big right turn to align side with TARGET_HEADING"));
+        Serial.println(F("CLIMB Ph2: Curve to Opponent"));
     }
 
-    // 常に大きく右旋回（左速い、右遅い）
+    // ★修正点: 目標は「自分のゴールの反対側 (+180度)」
+    float target_opponent = TARGET_HEADING + 180.0;
+    if (target_opponent >= 360.0) target_opponent -= 360.0;
+
+    // ターゲットとの誤差を計算
+    float error = target_opponent - compass_state.current_heading;
+    while (error < -180.0) error += 360.0;
+    while (error > 180.0) error -= 360.0;
+
+    // 敵陣の方を向いたら（誤差10度以内）終了
+    if (abs(error) < 10.0) { 
+        motor_ctrl.stop();
+        delay(200);
+        robot_state.climb_phase = 3; 
+        phase_start_time = 0;
+        Serial.println(F("Facing Opponent."));
+        return;
+    }
+
+    // 右カーブ（左を速く、右を遅く）
     motor_ctrl.setSpeeds(200, 105);
 
-    // 機体の右側がTARGET_HEADINGを向いているか判定
-    // → 現在の方位 +90° が TARGET_HEADING に近いかどうか
-    float side_heading = compass_state.current_heading + 90.0;
-    if (side_heading >= 360.0) side_heading -= 360.0;
-
-    float heading_error = TARGET_HEADING - side_heading;
-    while (heading_error < -180) heading_error += 360;
-    while (heading_error > 180) heading_error -= 360;
-
-    // 誤差が一定以下なら次フェーズへ
-    if (abs(heading_error) < 10.0) {  // 10°以内で判定
-        motor_ctrl.stop();
-        robot_state.climb_phase = 3;  // 向き調整フェーズへ
-        phase_start_time = 0;
-        Serial.println(F("Right side aligned with TARGET_HEADING. Moving to Phase 3."));
+    // タイムアウト
+    if (millis() - phase_start_time > 30000) {
+       motor_ctrl.stop();
+       robot_state.climb_phase = 3;
+       phase_start_time = 0;
     }
     return;
-}
+  }
 
-
-  
   // ========================================
-  // フェーズ3: 右に0.5秒旋回（向き調整）
+  // フェーズ3: 右に90度旋回（山の方を向く）
   // ========================================
   if (robot_state.climb_phase == 3) {
-    if (phase_start_time == 0) phase_start_time = millis();
+    if (phase_start_time == 0) {
+      phase_start_time = millis();
+      compass_state.updateHeading(MAGNETIC_DECLINATION);
+      phase_start_heading = compass_state.current_heading;
+      Serial.println(F("CLIMB Ph3: Right 90 (To Mnt)"));
+    }
     
-    if (millis() - phase_start_time > 500) {
+    float current = compass_state.current_heading;
+    float diff = abs(current - phase_start_heading);
+    if (diff > 180.0) diff = 360.0 - diff;
+    
+    // 90度回ったら終了（これで山の方向）
+    if (diff >= 90.0) {
       motor_ctrl.stop();
       delay(200);
       robot_state.climb_phase = 4;
       phase_start_time = 0;
-      Serial.println(F("CLIMB Phase 4: Move forward"));
       return;
     }
+    
+    // 右旋回
     motor_ctrl.setSpeeds(MOTOR_AVOID_ROT, -MOTOR_AVOID_ROT);
+    
+    // タイムアウト
+    if (millis() - phase_start_time > 10000) {
+       motor_ctrl.stop();
+       robot_state.climb_phase = 4;
+       phase_start_time = 0;
+    }
     return;
   }
   
   // ========================================
-  // フェーズ4: 1秒前進（坂への助走）
+  // フェーズ4: 1秒前進（助走）
   // ========================================
   if (robot_state.climb_phase == 4) {
     if (phase_start_time == 0) phase_start_time = millis();
@@ -279,7 +307,7 @@ if (robot_state.climb_phase == 2) {
       robot_state.climb_phase = 5;
       phase_start_time = 0;
       roll_integral = 0;
-      Serial.println(F("CLIMB Phase 5: Climbing UP"));
+      Serial.println(F("CLIMB Ph5: Climbing UP"));
       return;
     }
     motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
@@ -290,17 +318,14 @@ if (robot_state.climb_phase == 2) {
   // フェーズ5: 直進登坂（ロール角制御）
   // ========================================
   if (robot_state.climb_phase == 5) {
-    // --- 変更点: 登頂したらフェーズ6（頂上移動）へ ---
     if (hasReachedTop()) {
-      // 停止せずにそのまま次のフェーズへ
       robot_state.climb_phase = 6;
       phase_start_time = 0;
-      roll_integral = 0; // 積分リセット
-      Serial.println(F("Reached Top! Moving to traverse plateau."));
+      roll_integral = 0; 
+      Serial.println(F("Reached Top!"));
       return;
     }
     
-    // カップ検知時は一時停止・確認（既存ロジック）
     if (dist > 0 && dist < 30) {
       motor_ctrl.stop();
       robot_state.mode = STATE_CHECK_STATIC;
@@ -312,28 +337,23 @@ if (robot_state.climb_phase == 2) {
       return;
     }
     
-    // ロール角制御を実行（共通処理として後述のブロックを使用）
     executeRollControl(lastAccelRead, current_roll, roll_integral);
   }
 
   // ========================================
-  // フェーズ6: 頂上の平地を直進（下り坂を探す）
+  // フェーズ6: 頂上の平地を直進
   // ========================================
   if (robot_state.climb_phase == 6) {
-    // 単純直進（頂上は平らと仮定）
     motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
 
-    // 坂道を検知したら「下り坂」と判断してフェーズ7へ
-    // isSlopeDetectedは絶対値で判定するため、下りも検知可能
     if (isSlopeDetected()) {
       robot_state.climb_phase = 7;
       phase_start_time = 0;
       roll_integral = 0;
-      Serial.println(F("Descent detected! Starting descent."));
+      Serial.println(F("Descent detected!"));
       return;
     }
 
-    // 万が一、5秒以上平地が続いたら（頂上が非常に広い、または検知ミス）、強制的に探索へ
     static unsigned long traverseStart = 0;
     if (traverseStart == 0) traverseStart = millis();
     if (millis() - traverseStart > 5000) {
@@ -341,33 +361,26 @@ if (robot_state.climb_phase == 2) {
         robot_state.mode = STATE_SEARCH;
         robot_state.climb_phase = 0;
         traverseStart = 0;
-        Serial.println(F("Timeout on top. Searching."));
     }
   }
 
   // ========================================
-  // フェーズ7: 下り坂（ロール角制御で直進）
+  // フェーズ7: 下り坂
   // ========================================
   if (robot_state.climb_phase == 7) {
-    // 平地（下山完了）を検知したら終了
-    if (hasReachedTop()) { // hasReachedTopは「平地検知」関数なので下山完了判定にも使える
+    if (hasReachedTop()) { 
       motor_ctrl.stop();
-      Serial.println(F("Descended to flat ground. To SEARCH mode."));
-      
-      // 探索モードへ遷移
+      Serial.println(F("Descended. To SEARCH."));
       robot_state.mode = STATE_SEARCH;
       robot_state.search_start_time = millis();
       robot_state.search_rotation_count = 0;
       robot_state.object_detected_in_search = false;
-      
-      // リセット
       roll_integral = 0;
       robot_state.climb_phase = 0;
       phase_start_time = 0;
       return;
     }
 
-    // 下り坂もロール角制御を使って真っ直ぐ降りる
     executeRollControl(lastAccelRead, current_roll, roll_integral);
   }
 }

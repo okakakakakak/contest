@@ -156,7 +156,9 @@ void runClimbMode() {
   // ========================================
   // 終了条件: 黒線を検出したら即時停止（フェーズ問わず）
   // ========================================
-  if (color_sensor.current_color == COLOR_BLACK) {
+  if (color_sensor.current_color == COLOR_BLACK || 
+      color_sensor.current_color == COLOR_RED || 
+      color_sensor.current_color == COLOR_BLUE) {
     motor_ctrl.stop();
     robot_state.mode = STATE_AVOID;
     robot_state.state_start_time = millis();

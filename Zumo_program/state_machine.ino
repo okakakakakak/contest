@@ -311,6 +311,12 @@ void task() {
     // STATE_SEARCH: 探索状態
     // ========================================
     case STATE_SEARCH: {
+      // ★ 追加: 色検知による回避
+      if (color_sensor.current_color == COLOR_BLACK || color_sensor.current_color == COLOR_RED || color_sensor.current_color == COLOR_BLUE) {
+        robot_state.mode = STATE_AVOID;
+        robot_state.state_start_time = millis();
+        break;
+      }
       // ★ スタック検知クールダウン解除判定
       if (!robot_state.allow_stack_check &&
           millis() - robot_state.search_start_time > 1000) {
@@ -545,6 +551,13 @@ void task() {
         motor_ctrl.stop();
         break;
       }
+
+      // ★ 追加: 色検知による回避
+      if (color_sensor.current_color == COLOR_BLACK || color_sensor.current_color == COLOR_RED || color_sensor.current_color == COLOR_BLUE) {
+        robot_state.mode = STATE_AVOID;
+        robot_state.state_start_time = millis();
+        break;
+      }
       
       // PI制御で目標方位への制御入力を計算
       float u = turnTo(TARGET_HEADING);
@@ -611,6 +624,13 @@ void task() {
     case STATE_WAIT_AFTER_TURN:
       motor_ctrl.stop();
       
+      // ★ 追加: 色検知による回避
+      if (color_sensor.current_color == COLOR_BLACK || color_sensor.current_color == COLOR_RED || color_sensor.current_color == COLOR_BLUE) {
+        robot_state.mode = STATE_AVOID;
+        robot_state.state_start_time = millis();
+        break;
+      }
+
       // 500ms待機後、脱出モードへ
       if (millis() - robot_state.state_start_time >= 500) {
         robot_state.mode = STATE_ESCAPE;
@@ -676,6 +696,16 @@ void task() {
     // STATE_DEPOSIT: 預け入れ動作状態（1秒後退 + 半回転 + 3秒前進）
     // ========================================
     case STATE_DEPOSIT:
+      // ★ 追加: 預け入れ動作中でもラインに乗ったら回避へ
+      // ※ただし、自陣（赤/青）にわざと入る動作なので、ここでは「黒」のみを判定する
+      if (color_sensor.current_color == COLOR_BLACK) {
+        // 後退中(最初の670ms)以外で検知した場合に回避に遷移するなどの調整も可能ですが、
+        // 安全のため即座に回避へ遷移させます。
+        robot_state.mode = STATE_AVOID;
+        robot_state.state_start_time = millis();
+        break;
+      }
+
       if (millis() - robot_state.state_start_time < 670) {
         // 最初の1秒間：後退
         motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
@@ -712,6 +742,13 @@ void task() {
     // ========================================
     case STATE_CHECK_ZONE:
       // この状態は使用しないが、念のため探索に戻す
+      // ★ 追加: 色検知による回避
+      if (color_sensor.current_color == COLOR_BLACK || color_sensor.current_color == COLOR_RED || color_sensor.current_color == COLOR_BLUE) {
+        robot_state.mode = STATE_AVOID;
+        robot_state.state_start_time = millis();
+        break;
+      }
+
       robot_state.mode = STATE_SEARCH;
       robot_state.search_start_time = millis();
       robot_state.search_rotation_count = 0;
@@ -722,6 +759,15 @@ void task() {
     // STATE_AVOID: 回避状態（黒線を避ける）
     // ========================================
     case STATE_AVOID:
+      // 回避動作中にさらに別のラインを踏んだ場合
+      // 最初の後退（670ms）が終わった後の旋回・前進フェーズで再検知を有効にします
+      if (millis() - robot_state.state_start_time > 670) {
+        if (color_sensor.current_color == COLOR_BLACK || color_sensor.current_color == COLOR_RED || color_sensor.current_color == COLOR_BLUE) {
+          robot_state.mode = STATE_AVOID; // 状態をリセットして最初から回避
+          robot_state.state_start_time = millis();
+          break;
+        }
+      }
       if (millis() - robot_state.state_start_time < 670) {
         // 最初の1000ms：後退
         motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);

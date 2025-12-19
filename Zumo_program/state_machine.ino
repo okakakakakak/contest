@@ -387,6 +387,14 @@ void task() {
       // 前進
       motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE);
 
+      // 黒線・赤色・青色を検知したら回避モードへ
+      if (color_sensor.current_color == COLOR_BLACK ||
+      color_sensor.current_color == COLOR_RED ||
+      color_sensor.current_color == COLOR_BLUE) {
+      robot_state.mode = STATE_AVOID;
+      robot_state.state_start_time = millis();
+      }
+
       //// ★ スタック検知 → STACK
       // クールダウン中なら検知しないように条件を追加
       if (robot_state.allow_stack_check && isStacked()) {
@@ -413,14 +421,6 @@ void task() {
         Serial.println(robot_state.climb_start_heading, 1);
         
         break;
-      }
-
-      // 黒線・赤色・青色を検知したら回避モードへ
-      if (color_sensor.current_color == COLOR_BLACK ||
-      color_sensor.current_color == COLOR_RED ||
-      color_sensor.current_color == COLOR_BLUE) {
-      robot_state.mode = STATE_AVOID;
-      robot_state.state_start_time = millis();
       }
       // 30cm未満の物体を検知したら静止確認へ
       else if (dist > 0 && dist < 30) {

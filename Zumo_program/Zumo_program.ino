@@ -30,9 +30,9 @@ PIController pi_ctrl;                   // PI制御
 // ============================================
 // 定数定義
 // ============================================
-float TARGET_HEADING = 210.0;       // 目標方位角（度）
+float TARGET_HEADING = 0.0;       // 目標方位角（度）
 const float MAGNETIC_DECLINATION = -7.67;  // 磁気偏角（度、地域によって異なる）
-const char ROBOT_NAME[] PROGMEM = "Zumo1";  // ← ロボット名（必要に応じて変更）
+const char ROBOT_NAME[] PROGMEM = "oka";  // ← ロボット名（必要に応じて変更）
 
 // ============================================
 // ボタン待機関数（簡略版）
@@ -75,7 +75,7 @@ void setup() {
   delay(1500);  // シリアル通信の安定化を待つ
 
   // バージョン情報を表示
-  Serial.println(F("\n=== Zumo v3.1 ==="));
+  Serial.println(F("\n=== Zumo v3.2 ==="));
   
   // ========================================
   // カラーセンサーの初期化
@@ -126,6 +126,7 @@ void setup() {
     delay(10);
   }
 
+/*
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'B') {
@@ -139,6 +140,7 @@ void setup() {
       Serial.println(c);
     }
   }
+  */
   
   // ========================================
   // コンパスキャリブレーション
@@ -148,17 +150,20 @@ void setup() {
   calibrationCompassAdvanced();  // キャリブレーション実行（15秒間回転）
   Serial.println(F("Done!"));
 
-  // ========================================
-  // 💡 NEW: Z軸オフセットキャリブレーション
-  // ========================================
-  /*
-  Serial.println(F("--- Accel Z Calib ---"));
-  Serial.println(F("Place robot on a level surface. Press button."));
+  //キャリブレーション後の現在の方位をTRAGET_HEADINGに設定
+  //ロボットを自分のゴールの方向に向ける
+  Serial.println(F("--- Setting TARGET_HEADING ---"));
   waitForButtonPress();  // ボタンが押されるまで待機
-  calibrateAccelZOffset();  // Z軸オフセットを計算
-  Serial.println(F("Done! Z-Offset: "));
-  Serial.println(ACCEL_Z_OFFSET);  // オフセット値を表示
-  */
+
+  //ボタンが押された瞬間の向きを取得して設定
+  compass_state.updateHeading(MAGNETIC_DECLINATION);
+  for(int i=0; i<10; i++) {
+    compass_state.updateHeading(MAGNETIC_DECLINATION);
+    delay(10);
+  }
+  TARGET_HEADING = compass_state.current_heading;
+  Serial.print(F("TARGET_HEADING set to: "));
+  Serial.println(TARGET_HEADING, 1);
 
   // ========================================
   // カラーキャリブレーション
@@ -181,7 +186,7 @@ void setup() {
   Serial.println(F("Running..."));
 
   // 機体名を送信（追加）
-  Serial.println("NAME:AAAA");
+  Serial.println("NAME:oka");
 
 }
 

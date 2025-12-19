@@ -126,21 +126,18 @@ void setup() {
     delay(10);
   }
 
-/*
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'B') {
-      TARGET_HEADING = 210.0 - 180;
       Serial.println("GOAL_COLOR:B");  //確認送信
     } else if (c == 'R') {
-      TARGET_HEADING = 210.0 + 0.0;
       Serial.println("GOAL_COLOR:R");  //確認送信
     } else {
       Serial.print(F("Unexpected color code: "));
       Serial.println(c);
     }
   }
-  */
+
   
   // ========================================
   // コンパスキャリブレーション

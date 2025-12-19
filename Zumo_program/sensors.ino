@@ -316,43 +316,95 @@ static void updateMinMax(int x, int y, float& mx_min, float& mx_max, float& my_m
   if (y > my_max) my_max = y;
 }
 // ============================================
-// Stack検知関数（加速度センサー利用）
+// Stack検知関数（回転異常検知 特化版）
 // ============================================
 bool isStacked() {
-  static unsigned long lastCheck = 0;
-  static int stillCount = 0;
+  static unsigned long lastCheckTime = 0;
+  static float prevHeading = 0;
+  static int stackCounter = 0;
 
-  if (millis() - lastCheck > 200) {
-    compass_state.compass.readAcc();
-    float ax = compass_state.compass.a.x;
-    float ay = compass_state.compass.a.y;
-    float az = compass_state.compass.a.z;
+  // チェック間隔になるまで待機
+  if (millis() - lastCheckTime < STACK_CHECK_INTERVAL) {
+    return false;
+  }
+  
+  // ==================================================
+  // 1. データの準備
+  // ==================================================
+  // 現在の方位と前回からの変化量を取得
+  float currHeading = compass_state.current_heading;
+  float diff = abs(currHeading - prevHeading);
+  if (diff > 180.0) {
+    diff = 360.0 - diff; // 359度→1度のような境界またぎを補正
+  }
+  
+  // 更新
+  prevHeading = currHeading;
+  lastCheckTime = millis();
 
-    float norm = sqrt(ax*ax + ay*ay + az*az);
+  // モーターの状態を取得
+  int left = motor_ctrl.left_speed;
+  int right = motor_ctrl.right_speed;
 
-    // モーターが動いているか？
-    bool motorsActive = (abs(motor_ctrl.left_speed) > 30 || abs(motor_ctrl.right_speed) > 30);
-
-    // 加速度変化が小さいか？（相対変化率で判定）
-    static float prevNorm = 0;
-    bool accelStill = (prevNorm != 0 && abs(norm - prevNorm) / norm < 0.1); // 5%未満
-    prevNorm = norm;
-
-    if (motorsActive && accelStill) {
-      stillCount++;
-    } else {
-      // リセットせず「減算」にすることでノイズに強くする
-      if (stillCount > 0) stillCount--;
-    }
-
-    lastCheck = millis();
+  // モーター停止中（意図的な停止）は検知しない
+  if (abs(left) < 50 && abs(right) < 50) {
+    stackCounter = 0;
+    return false;
   }
 
-  return (stillCount >= 5); // 約1秒間「ほぼ動きなし」でスタック判定
+  // ==================================================
+  // 2. ロボットの「意図」による分岐判定
+  // ==================================================
+  
+  bool isStackDetected = false;
+
+  // --------------------------------------------------
+  // ケースA: ロボットは「直進」しようとしている
+  // (左右とも正転、かつ左右の速度差が小さい)
+  // --------------------------------------------------
+  if (left > 50 && right > 50 && abs(left - right) < 60) {
+    
+    // 【異常検知】直進したいのに、大きく方角が変わっている！
+    // → 相手機体に絡まって強制的に回されている状態
+    if (diff > MAX_STRAIGHT_ERROR_ANGLE) {
+      // デバッグ用: 必要ならコメントアウトを外す
+      // Serial.print(F("STRAIGHT_SPIN! Diff:")); Serial.println(diff);
+      isStackDetected = true;
+    }
+  }
+  
+  // --------------------------------------------------
+  // ケースB: ロボットは「回転」しようとしている
+  // (左右が逆回転、または片方が停止、または大きなカーブ)
+  // --------------------------------------------------
+  else {
+    // 【異常検知】回転したいのに、方角がほとんど変わっていない！
+    // → 壁や相手に引っかかって回れない状態
+    if (diff < MIN_TURN_ANGLE) {
+      // デバッグ用
+      // Serial.print(F("TURN_STALL! Diff:")); Serial.println(diff);
+      isStackDetected = true;
+    }
+  }
+
+  // ==================================================
+  // 3. 判定の確定（カウンタ処理）
+  // ==================================================
+  if (isStackDetected) {
+    stackCounter++;
+  } else {
+    // 正常ならカウンタを減らす（即リセットではなく減算にして粘り強くする）
+    if (stackCounter > 0) stackCounter--;
+  }
+
+  // 連続3回（200ms * 3 = 0.6秒）異常が続いたらスタックと判定
+  if (stackCounter >= 3) {
+    stackCounter = 0; // リセットして通知
+    return true;
+  }
+
+  return false;
 }
-
-
-
 
 /**
  * 地磁気センサーのキャリブレーションを行う関数

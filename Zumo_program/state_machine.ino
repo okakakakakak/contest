@@ -311,7 +311,7 @@ void task() {
     case STATE_SEARCH: {
       // ★ スタック検知クールダウン解除判定
       if (!robot_state.allow_stack_check &&
-          millis() - robot_state.search_start_time > 2500) {
+          millis() - robot_state.search_start_time > 1000) {
         robot_state.allow_stack_check = true;
       }
       // 物体検知ロジック：30cm未満の物体を3回検知したら静止確認へ
@@ -376,6 +376,15 @@ void task() {
     case STATE_MOVE:
       // 前進
       motor_ctrl.setSpeeds(MOTOR_MOVE, MOTOR_MOVE);
+
+      //// ★ スタック検知 → STACK
+      // クールダウン中なら検知しないように条件を追加
+      if (robot_state.allow_stack_check && isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
       
       // 💡 修正: 傾斜検知による STATE_CLIMB への遷移
       if (isSlopeDetected()) {
@@ -418,14 +427,7 @@ void task() {
         robot_state.search_rotation_count = 0;
         robot_state.object_detected_in_search = false;
       }
-      //// ★ スタック検知 → STACK
-      // クールダウン中なら検知しないように条件を追加
-      if (robot_state.allow_stack_check && isStacked()) {
-        motor_ctrl.stop();
-        robot_state.mode = STATE_STACK;
-        robot_state.state_start_time = millis();
-        break;
-      }
+
 
       break;
 
@@ -476,6 +478,14 @@ void task() {
       robot_state.state_start_time = millis();
       break;
       }
+      //// ★ スタック検知 → STACK
+      // クールダウン中なら検知しないように条件を追加
+      if (robot_state.allow_stack_check && isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
 
       // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
       if (isSlopeDetected()) {
@@ -503,14 +513,7 @@ void task() {
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
       }
-      //// ★ スタック検知 → STACK
-      // クールダウン中なら検知しないように条件を追加
-      if (robot_state.allow_stack_check && isStacked()) {
-        motor_ctrl.stop();
-        robot_state.mode = STATE_STACK;
-        robot_state.state_start_time = millis();
-        break;
-      }
+
       break;
 
     // ========================================

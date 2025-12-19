@@ -37,8 +37,8 @@ const char str_climb[] PROGMEM = "CLIMB";
 const char str_check_zone[] PROGMEM = "CHECK_ZONE";
 const char str_deposit[] PROGMEM = "DEPOSIT";
 const char str_stack[] PROGMEM = "STACK";
+const char str_carryavoid[] PROGRAM = "CARRY_AVOID";
 const char str_unknown[] PROGMEM = "UNKNOWN";
-
 
 // モード名の配列（プログラムメモリに格納）
 const char* const mode_names[] PROGMEM = {
@@ -47,7 +47,8 @@ const char* const mode_names[] PROGMEM = {
   str_climb,
   str_check_zone, 
   str_deposit,
-  str_stack 
+  str_stack,
+  str_carryavoid
 };
 
 /**
@@ -57,7 +58,7 @@ const char* const mode_names[] PROGMEM = {
  * @param mode モード番号
  */
 void printModeName(byte mode) {
-  if (mode < 15) {
+  if (mode < 16) {
     // プログラムメモリから文字列をバッファにコピー
     char buffer[20];
     strcpy_P(buffer, (char*)pgm_read_word(&(mode_names[mode])));
@@ -194,6 +195,8 @@ void task() {
   compass_state.updateHeading(MAGNETIC_DECLINATION);
   robot_state.updateTime();  // 時刻を更新
   printModeChange();         // モード変更を表示
+  // 1: 右回転(CW), -1: 左回転(CCW)
+  static int avoid_turn_direction = 0;
   
   // 距離を計測
   int dist = ultrasonic.getDistance();
@@ -623,7 +626,42 @@ void task() {
     case STATE_ESCAPE: {
       // 黒線検知 → 回避
       if (color_sensor.current_color == COLOR_BLACK) {
-        robot_state.mode = STATE_AVOID;
+        // ▼▼▼ 変更箇所: 黒線検知時の処理 ▼▼▼
+        motor_ctrl.stop(); // まず停止
+        
+        // --- 回転方向の決定ロジック ---
+        float current = compass_state.current_heading;
+        float target = TARGET_HEADING;
+        
+        // 差分計算 (current - target)
+        float diff = current - target;
+        
+        // -180〜180度に正規化
+        while (diff < -180) diff += 360;
+        while (diff > 180) diff -= 360;
+        
+        // ★修正ポイント: 条件と回転方向の反転
+        
+        // ケース1: ターゲットより「右」を向いている場合 (diff > 1.0)
+        // → 左回り (Counter-Clockwise) で戻す
+        if (diff > 1.0) {
+           avoid_turn_direction = -1; // 左 (-1)
+           Serial.println(F("Black Line! Facing Right -> Correct Left"));
+        }
+        // ケース2: ターゲットより「左」を向いている場合 (diff < -1.0)
+        // → 右回り (Clockwise) で戻す
+        else if (diff < -1.0) {
+           avoid_turn_direction = 1; // 右 (1)
+           Serial.println(F("Black Line! Facing Left -> Correct Right"));
+        }
+        else {
+           // ほぼ正面（誤差1度以内）の場合
+           // どちらかに回らないとラインから出られないため、とりあえず右へ
+           avoid_turn_direction = 1; 
+        }
+
+        // モード遷移
+        robot_state.mode = STATE_CARRY_AVOID;
         robot_state.state_start_time = millis();
         break;
       }
@@ -785,6 +823,33 @@ void task() {
         pi_ctrl.reset();
         // ★ クールダウン開始
         robot_state.allow_stack_check = false;
+      }
+      break;
+
+    case STATE_CARRY_AVOID:
+      // 後退フェーズなし、いきなり回転
+      if (millis() - robot_state.state_start_time < 500) {
+        if (avoid_turn_direction == 1) {
+          // 右回転 (左正転、右逆転)
+          motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
+        } else {
+          // 左回転 (左逆転、右正転)
+          motor_ctrl.setSpeeds(-MOTOR_ROTATE, MOTOR_ROTATE);
+        }
+      } else {
+        // 回転完了 -> ESCAPEへ復帰
+        motor_ctrl.stop();
+        robot_state.mode = STATE_ESCAPE;
+        robot_state.state_start_time = millis();
+        pi_ctrl.reset();
+        Serial.println(F("Avoid turn done. Resume ESCAPE."));
+      }
+      
+      // スタック検知
+      if (robot_state.allow_stack_check && isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
       }
       break;
       

@@ -52,13 +52,14 @@
 #define STATE_CHECK_ZONE        12  // ゾーン確認状態（STATE_CLIMBの挿入で1つずれる）
 #define STATE_DEPOSIT           13  // 預け入れ状態（STATE_CLIMBの挿入で1つずれる）
 #define STATE_STACK             14  // スタック検知モード
+#define STATE_CARRY_AVOID       15  // 運搬時回避
 
 
 // ============================================
 // モーター速度定数
 // ============================================
 // 各状態で使用するモーター速度の基準値
-#define MOTOR_ROTATE     140   // 回転時の速度（140 → 210）
+#define MOTOR_ROTATE     130   // 回転時の速度（140 → 210）
 #define MOTOR_FORWARD    210   // 前進時の速度（140 → 210）
 #define MOTOR_ESCAPE     210   // 脱出時の速度（140 → 210）
 #define MOTOR_REVERSE    -210  // 後退時の速度（-140 → -210）
@@ -216,6 +217,8 @@ struct RobotState {
   
   byte cups_delivered;  // 運搬したカップの数
 
+  unsigned long last_carry_avoid_time; // 回避動作完了時刻（クールダウン用）
+
   // ★ スタック判定用フラグ
   bool allow_stack_check;
   
@@ -226,7 +229,7 @@ struct RobotState {
   // コンストラクタ：初期化
   RobotState() : 
     mode(STATE_INIT), previous_mode(255),  // -1の代わりに255（byteの最大値）
-    state_start_time(0), search_start_time(0),
+    state_start_time(0), search_start_time(0), last_carry_avoid_time(0),
     search_rotation_count(0), object_detected_in_search(false),
     time_now(0), time_prev(0), cups_delivered(0),
     climb_start_heading(0), climb_phase(0) {}

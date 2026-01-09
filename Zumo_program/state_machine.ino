@@ -37,7 +37,7 @@ const char str_climb[] PROGMEM = "CLIMB";
 const char str_check_zone[] PROGMEM = "CHECK_ZONE";
 const char str_deposit[] PROGMEM = "DEPOSIT";
 const char str_stack[] PROGMEM = "STACK";
-const char str_carryavoid[] PROGRAM = "CARRY_AVOID";
+const char str_carryavoid[] PROGMEM = "CARRY_AVOID";
 const char str_unknown[] PROGMEM = "UNKNOWN";
 
 // モード名の配列（プログラムメモリに格納）
@@ -325,7 +325,7 @@ void task() {
           millis() - robot_state.search_start_time > 1000) {
         robot_state.allow_stack_check = true;
       }
-      // 物体検知ロジック：30cm未満の物体を3回検知したら静止確認へ
+      // 物体検知ロジック：30cm未満の物体を1回検知したら静止確認へ
       if (dist > 0 && dist < 40) {
         // 初めて物体を検知した場合
         if (!robot_state.object_detected_in_search) {
@@ -337,7 +337,7 @@ void task() {
         robot_state.search_rotation_count++;
         
         // 3回検知したら静止確認へ
-        if (robot_state.search_rotation_count >= 3) {
+        if (robot_state.search_rotation_count >= 1) {
           motor_ctrl.stop();
           delay(100);
           robot_state.mode = STATE_CHECK_STATIC;
@@ -652,8 +652,11 @@ void task() {
     // STATE_ESCAPE: 脱出状態（物体を運搬中）
     // ========================================
     case STATE_ESCAPE: {
+      // ★追加: クールダウン中かどうか判定（現在時刻 - 終了時刻 < 2000ms）
+      bool is_cooldown = (millis() - last_carry_avoid_time < 2000);
+
       // 黒線検知 → 回避
-      if (color_sensor.current_color == COLOR_BLACK) {
+      if (color_sensor.current_color == COLOR_BLACK && !is_cooldown) {
         // ▼▼▼ 変更箇所: 黒線検知時の処理 ▼▼▼
         motor_ctrl.stop(); // まず停止
         
@@ -816,7 +819,7 @@ void task() {
       if (millis() - robot_state.state_start_time < 670) {
         // 最初の1000ms：後退
         motor_ctrl.setSpeeds(MOTOR_REVERSE, MOTOR_REVERSE);
-      } else if (millis() - robot_state.state_start_time < 1500) {
+      } else if (millis() - robot_state.state_start_time < 2000) {
         // 次の2500ms：反時計回りに回転
         // 左モーター逆転、右モーター正転
         motor_ctrl.setSpeeds(-MOTOR_AVOID_ROT, MOTOR_AVOID_ROT);
@@ -896,6 +899,8 @@ void task() {
         robot_state.mode = STATE_ESCAPE;
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
+        // ★追加: 回避動作が完了した時刻を記録（ここから2秒間は再反応しない）
+        last_carry_avoid_time = millis();
         Serial.println(F("Avoid turn done. Resume ESCAPE."));
       }
       

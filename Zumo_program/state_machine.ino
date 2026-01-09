@@ -503,112 +503,69 @@ void task() {
       }
       break;
 
-    // ========================================
+// ========================================
     // STATE_APPROACH: 接近状態（修正版）
     // ========================================
-case STATE_APPROACH: {
-  // 静的変数で回転フェーズを管理
-  static bool rotation_done = false;
-  
-  // 黒線・赤色・青色を検知したら回避モードへ
-  if (color_sensor.current_color == COLOR_BLACK ||
-      color_sensor.current_color == COLOR_RED ||
-      color_sensor.current_color == COLOR_BLUE) {
-    motor_ctrl.stop();
-    robot_state.mode = STATE_AVOID;
-    robot_state.state_start_time = millis();
-    rotation_done = false;  // リセット
-    break;
-  }
-  
-  // ★ スタック検知 → STACK
-  if (robot_state.allow_stack_check && isStacked()) {
-    motor_ctrl.stop();
-    robot_state.mode = STATE_STACK;
-    robot_state.state_start_time = millis();
-    rotation_done = false;  // リセット
-    break;
-  }
-
-      // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
-      /*if (isSlopeDetected()) {
-        motor_ctrl.stop();
-        
-        // 開始方位を記録
-        compass_state.updateHeading(MAGNETIC_DECLINATION);
-        robot_state.climb_start_heading = compass_state.current_heading;
-        robot_state.climb_phase = 0;  // 円弧旋回フェーズから開始
-        
-        robot_state.mode = STATE_CLIMB;
-        robot_state.state_start_time = millis();
-        pi_ctrl.reset();
-        
-        Serial.println(F("Slope detected during APPROACH, switching to CLIMB"));
-        break;
-      }*/
-
-      // 前進
-      motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
+    case STATE_APPROACH: {
+      // 静的変数で回転フェーズを管理
+      static bool rotation_done = false;
       
-      // 7cm未満に近づいたら旋回モードへ
-      if (dist < 7) {
-        robot_state.mode = STATE_TURN_TO_TARGET;
+      // 黒線・赤色・青色を検知したら回避モードへ
+      if (color_sensor.current_color == COLOR_BLACK ||
+          color_sensor.current_color == COLOR_RED ||
+          color_sensor.current_color == COLOR_BLUE) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_AVOID;
         robot_state.state_start_time = millis();
-        pi_ctrl.reset();
+        rotation_done = false;  // リセット
+        break;
       }
-      //// ★ スタック検知 → STACK
-      if (isStacked()) {
+      
+      // ★ スタック検知 → STACK
+      if (robot_state.allow_stack_check && isStacked()) {
         motor_ctrl.stop();
         robot_state.mode = STATE_STACK;
         robot_state.state_start_time = millis();
+        rotation_done = false;  // リセット
         break;
+      }
+
+      // ========================================
+      // フェーズ1: 時計回りに0.5秒回転
+      // ========================================
+      if (!rotation_done) {
+        if (millis() - robot_state.state_start_time < 500) {
+          // 時計回りに回転（左モーター正転、右モーター逆転）
+          motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
+          break;
+        } else {
+          // 回転完了
+          motor_ctrl.stop();
+          rotation_done = true;
+          delay(100);  // 安定化のための短い待機
+        }
+      }
+
+      // ========================================
+      // フェーズ2: 前進（接近）
+      // ========================================
+      // 前進
+      motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
+      
+      // 距離を計測（ここで新しいローカル変数として宣言）
+      int approach_dist = ultrasonic.getDistance();
+      
+      // 7cm未満に近づいたら旋回モードへ
+      if (approach_dist < 7) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_TURN_TO_TARGET;
+        robot_state.state_start_time = millis();
+        pi_ctrl.reset();
+        rotation_done = false;  // 次回のためにリセット
       }
       
       break;
-    } else {
-      // 回転完了
-      motor_ctrl.stop();
-      rotation_done = true;
-      delay(100);  // 安定化のための短い待機
     }
-  }
-
-    // ========================================
-  // フェーズ1: 時計回りに0.3秒回転
-  // ========================================
-  if (!rotation_done) {
-    if (millis() - robot_state.state_start_time < 500) {
-      // 時計回りに回転（左モーター正転、右モーター逆転）
-      motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
-      break;
-    } else {
-      // 回転完了
-      motor_ctrl.stop();
-      rotation_done = true;
-      delay(100);  // 安定化のための短い待機
-    }
-  }
-
-  // ========================================
-  // フェーズ2: 前進（接近）
-  // ========================================
-  // 前進
-  motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
-  
-  // 距離を計測
-  int dist = ultrasonic.getDistance();
-  
-  // 7cm未満に近づいたら旋回モードへ
-  if (dist < 7) {
-    motor_ctrl.stop();
-    robot_state.mode = STATE_TURN_TO_TARGET;
-    robot_state.state_start_time = millis();
-    pi_ctrl.reset();
-    rotation_done = false;  // 次回のために�リセット
-  }
-  
-  break;
-}
 
     // ========================================
     // STATE_TURN_TO_TARGET: 目標方位へ旋回状態

@@ -217,6 +217,8 @@ struct RobotState {
   
   byte cups_delivered;  // 運搬したカップの数
 
+  unsigned long last_carry_avoid_time; // 回避動作完了時刻（クールダウン用）
+
   // ★ スタック判定用フラグ
   bool allow_stack_check;
   

@@ -678,7 +678,7 @@ case STATE_APPROACH: {
     // ========================================
     case STATE_ESCAPE: {
       // ★追加: クールダウン中かどうか判定（現在時刻 - 終了時刻 < 2000ms）
-      bool is_cooldown = (millis() - last_carry_avoid_time < 2000);
+      bool is_cooldown = (millis() - robot_state.last_carry_avoid_time < 2000);
 
       // 黒線検知 → 回避
       if (color_sensor.current_color == COLOR_BLACK && !is_cooldown) {
@@ -925,7 +925,7 @@ case STATE_APPROACH: {
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
         // ★追加: 回避動作が完了した時刻を記録（ここから2秒間は再反応しない）
-        last_carry_avoid_time = millis();
+        robot_state.last_carry_avoid_time = millis();
         Serial.println(F("Avoid turn done. Resume ESCAPE."));
       }
       

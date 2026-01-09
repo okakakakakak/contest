@@ -459,6 +459,14 @@ void task() {
         // climb変数のリセットが必要ならここで行う
         robot_state.climb_phase = 0; 
       }
+
+      // 黒線・赤色・青色を検知したら回避モードへ
+      if (color_sensor.current_color == COLOR_BLACK ||
+      color_sensor.current_color == COLOR_RED ||
+      color_sensor.current_color == COLOR_BLUE) {
+      robot_state.mode = STATE_AVOID;
+      robot_state.state_start_time = millis();
+      }
       break;
       
     // ========================================
@@ -500,7 +508,7 @@ void task() {
       }
 
       // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
-      if (isSlopeDetected()) {
+      /*if (isSlopeDetected()) {
         motor_ctrl.stop();
         
         // 開始方位を記録
@@ -514,7 +522,7 @@ void task() {
         
         Serial.println(F("Slope detected during APPROACH, switching to CLIMB"));
         break;
-      }
+      }*/
 
       // 前進
       motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);

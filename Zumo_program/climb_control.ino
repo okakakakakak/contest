@@ -142,8 +142,14 @@ bool hasReachedTop() {
 }
 
 // ============================================
+// 補助関数: ロール角制御（プロトタイプ宣言）
+// 引数に target_speed を追加しました
+// ============================================
+void executeRollControl(unsigned long &lastAccelRead, float &current_roll, float &roll_integral, int target_speed);
+
+// ============================================
 // 坂道登坂モードの実行（スパイラル・アプローチ版）
-// ay = -8000 を維持して回り込み -> 指定方位で直登へ
+// ay = -6000 を維持して回り込み -> 指定方位で直登へ
 // ============================================
 void runClimbMode() {
   static unsigned long lastAccelRead = 0;
@@ -172,20 +178,20 @@ void runClimbMode() {
   }
   
   // ========================================
-  // フェーズ0: スパイラル回り込み (ay = -8000制御)
+  // フェーズ0: スパイラル回り込み (ay = -6000制御)
   // 坂検知直後、後退せずにここからスタート
   // ========================================
   if (robot_state.climb_phase == 0) {
     if (phase_start_time == 0) {
       phase_start_time = millis();
       spiral_integral = 0; // 積分項リセット
-      Serial.println(F("CLIMB Ph0: Spiral Start (ay=-8000)"));
+      Serial.println(F("CLIMB Ph0: Spiral Start (ay=-6000)"));
     }
 
     // --- 1. 目標方位に達したかチェック ---
-    // 目標: TARGET_HEADING - 90度 (自ゴールの左側からアプローチ)
-    // ※山を右に見るルートの場合です。左に見るなら +90 にしてください。
-    float target_spiral_end = TARGET_HEADING - 90.0;
+    // 目標: TARGET_HEADING - 100度 (自ゴールの左側からアプローチ)
+    // ※山を右に見るルートの場合です。左に見るなら +100 にしてください。
+    float target_spiral_end = TARGET_HEADING - 100.0;
     if (target_spiral_end < 0) target_spiral_end += 360.0;
 
     // 誤差計算
@@ -204,25 +210,32 @@ void runClimbMode() {
         return;
     }
 
-// --- 2. 加速度(ay)を用いた P制御 ---
+// --- 2. 加速度(ay)を用いた PI制御 ---
     if (millis() - lastAccelRead > ACCEL_READ_INTERVAL) {
         compass_state.compass.readAcc();
         float ay = compass_state.compass.a.y; 
 
-        // 目標値: -8000
-        float target_ay = -8000.0; 
+        // 目標値: -7000
+        float target_ay = -5500.0; 
 
         // 誤差: 目標 - 現在
         // ay が -2000(平坦)なら error = -6000 (大きい) -> uも大きい -> 強く回る
-        // ay が -8000(目標)なら error = 0 -> uも0 -> まっすぐ進む
+        // ay が -6000(目標)なら error = 0 -> uも0 -> まっすぐ進む
         float error = target_ay - ay;
 
-        // 【修正点】 I項(積分)を削除し、P項のみにする
+        // 【調整点1】 PIパラメータ
         // 反応係数 (0.015 〜 0.03 くらいで調整)
         float Kp = 0.025; 
+        float Ki = 0.001;  // Iを追加
+
+        // 積分項の計算（過去のズレを足し合わせる）
+        spiral_integral += error;
+        
+        // 積分の暴走防止
+        spiral_integral = constrain(spiral_integral, -5000, 5000);
 
         // 制御量 u (誤差に比例する)
-        float u = Kp * error;
+        float u = Kp * error + (Ki * spiral_integral);
         
         // 制限値
         u = constrain(u, -150, 150); 
@@ -275,7 +288,7 @@ void runClimbMode() {
     }
     
     // 通常のロール角制御（ay=0を目指す）
-    executeRollControl(lastAccelRead, current_roll, roll_integral);
+    executeRollControl(lastAccelRead, current_roll, roll_integral, 250);
   }
 
   // ========================================
@@ -326,17 +339,15 @@ void runClimbMode() {
     }
 
     // 下り坂もロール角制御を使って真っ直ぐ降りる
-    executeRollControl(lastAccelRead, current_roll, roll_integral);
+    executeRollControl(lastAccelRead, current_roll, roll_integral, 150);
   }
 }
 
 // ============================================
 // 補助関数: ロール角制御（フィルタ・PI制御強化版）
 // ============================================
-void executeRollControl(unsigned long &lastAccelRead, float &current_roll, float &roll_integral) {
-    // 基本速度（坂道なので少しパワーが必要）
-    const int CLIMB_BASE_SPEED = 150; 
-    
+void executeRollControl(unsigned long &lastAccelRead, float &current_roll, float &roll_integral, int target_speed) {
+     
     // 制御ゲイン（要調整）
     // PDFのP制御/PI制御の解説 [cite: 208, 213] を参考に設定
     const float KP_ROLL = 4.0;   // 比例ゲイン
@@ -412,29 +423,13 @@ void executeRollControl(unsigned long &lastAccelRead, float &current_roll, float
     
     // 操作量の制限（最大速度差）
     control_u = constrain(control_u, -100, 100);
-    
-    // ========================================
-    // モーター出力の決定
-    // ========================================
-    // PDF座標系 [cite: 134] では Y軸は「左」
-    // 右に傾く → ay > 0 → current_roll > 0 → error < 0 → control_u < 0
-    // 姿勢を戻すには「左」に旋回したい（左を減速、右を加速）
-    
-    // control_u が負のとき:
-    // Left = 150 + (-val) = 減速
-    // Right = 150 - (-val) = 加速
-    // → 左旋回となるため、この符号で正しい。
-    
-    // もし実機で逆に動く（転倒する）場合は、ここを逆にしてください：
-    // int left = CLIMB_BASE_SPEED - control_u;
-    // int right = CLIMB_BASE_SPEED + control_u;
-    
-    int left = CLIMB_BASE_SPEED + control_u;
-    int right = CLIMB_BASE_SPEED - control_u;
 
-    // モーター速度の正規化
-    left = constrain(left, 0, 255);
-    right = constrain(right, 0, 255);
+    // ★修正点: 引数で渡された target_speed を使う
+    int left = target_speed + control_u;
+    int right = target_speed - control_u;
+
+    left = constrain(left, 0, 400);  // 最大400まで許可
+    right = constrain(right, 0, 400);
     
     motor_ctrl.setSpeeds(left, right);
 

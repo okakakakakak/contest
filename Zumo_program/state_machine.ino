@@ -325,7 +325,7 @@ void task() {
           millis() - robot_state.search_start_time > 1000) {
         robot_state.allow_stack_check = true;
       }
-      // 物体検知ロジック：30cm未満の物体を3回検知したら静止確認へ
+      // 物体検知ロジック：30cm未満の物体を1回検知したら静止確認へ
       if (dist > 0 && dist < 40) {
         // 初めて物体を検知した場合
         if (!robot_state.object_detected_in_search) {
@@ -677,8 +677,11 @@ case STATE_APPROACH: {
     // STATE_ESCAPE: 脱出状態（物体を運搬中）
     // ========================================
     case STATE_ESCAPE: {
+      // ★追加: クールダウン中かどうか判定（現在時刻 - 終了時刻 < 2000ms）
+      bool is_cooldown = (millis() - last_carry_avoid_time < 2000);
+
       // 黒線検知 → 回避
-      if (color_sensor.current_color == COLOR_BLACK) {
+      if (color_sensor.current_color == COLOR_BLACK && !is_cooldown) {
         // ▼▼▼ 変更箇所: 黒線検知時の処理 ▼▼▼
         motor_ctrl.stop(); // まず停止
         
@@ -921,6 +924,8 @@ case STATE_APPROACH: {
         robot_state.mode = STATE_ESCAPE;
         robot_state.state_start_time = millis();
         pi_ctrl.reset();
+        // ★追加: 回避動作が完了した時刻を記録（ここから2秒間は再反応しない）
+        last_carry_avoid_time = millis();
         Serial.println(F("Avoid turn done. Resume ESCAPE."));
       }
       

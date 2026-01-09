@@ -227,7 +227,7 @@ struct RobotState {
   // コンストラクタ：初期化
   RobotState() : 
     mode(STATE_INIT), previous_mode(255),  // -1の代わりに255（byteの最大値）
-    state_start_time(0), search_start_time(0),
+    state_start_time(0), search_start_time(0), last_carry_avoid_time(0),
     search_rotation_count(0), object_detected_in_search(false),
     time_now(0), time_prev(0), cups_delivered(0),
     climb_start_heading(0), climb_phase(0) {}

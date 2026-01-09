@@ -494,6 +494,10 @@ void task() {
       if (ultrasonic.isObjectStatic()) {
         // 静止している → 接近モードへ
         robot_state.mode = STATE_APPROACH;
+        
+        // ★★★ 追加: ここで時間をリセットしないと、接近時の回転がスキップされます ★★★
+        robot_state.state_start_time = millis();
+
       } else {
         // 動いている（動物など） → 探索モードへ戻る
         robot_state.mode = STATE_SEARCH;

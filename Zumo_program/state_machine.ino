@@ -476,6 +476,14 @@ void task() {
         // climb変数のリセットが必要ならここで行う
         robot_state.climb_phase = 0; 
       }
+
+      // 黒線・赤色・青色を検知したら回避モードへ
+      if (color_sensor.current_color == COLOR_BLACK ||
+      color_sensor.current_color == COLOR_RED ||
+      color_sensor.current_color == COLOR_BLUE) {
+      robot_state.mode = STATE_AVOID;
+      robot_state.state_start_time = millis();
+      }
       break;
       
     // ========================================
@@ -522,31 +530,40 @@ case STATE_APPROACH: {
     break;
   }
 
-  // ★ NEW: 傾斜検知による STATE_CLIMB への遷移
-  if (isSlopeDetected()) {
-    motor_ctrl.stop();
-    
-    // 開始方位を記録
-    compass_state.updateHeading(MAGNETIC_DECLINATION);
-    robot_state.climb_start_heading = compass_state.current_heading;
-    robot_state.climb_phase = 0;  // 円弧旋回フェーズから開始
-    
-    robot_state.mode = STATE_CLIMB;
-    robot_state.state_start_time = millis();
-    pi_ctrl.reset();
-    rotation_done = false;  // リセット
-    
-    Serial.println(F("Slope detected during APPROACH, switching to CLIMB"));
-    break;
-  }
+      // 💡 NEW: 傾斜検知による STATE_CLIMB への遷移
+      /*if (isSlopeDetected()) {
+        motor_ctrl.stop();
+        
+        // 開始方位を記録
+        compass_state.updateHeading(MAGNETIC_DECLINATION);
+        robot_state.climb_start_heading = compass_state.current_heading;
+        robot_state.climb_phase = 0;  // 円弧旋回フェーズから開始
+        
+        robot_state.mode = STATE_CLIMB;
+        robot_state.state_start_time = millis();
+        pi_ctrl.reset();
+        
+        Serial.println(F("Slope detected during APPROACH, switching to CLIMB"));
+        break;
+      }*/
 
-  // ========================================
-  // フェーズ1: 時計回りに0.3秒回転
-  // ========================================
-  if (!rotation_done) {
-    if (millis() - robot_state.state_start_time < 500) {
-      // 時計回りに回転（左モーター正転、右モーター逆転）
-      motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
+      // 前進
+      motor_ctrl.setSpeeds(MOTOR_FORWARD, MOTOR_FORWARD);
+      
+      // 7cm未満に近づいたら旋回モードへ
+      if (dist < 7) {
+        robot_state.mode = STATE_TURN_TO_TARGET;
+        robot_state.state_start_time = millis();
+        pi_ctrl.reset();
+      }
+      //// ★ スタック検知 → STACK
+      if (isStacked()) {
+        motor_ctrl.stop();
+        robot_state.mode = STATE_STACK;
+        robot_state.state_start_time = millis();
+        break;
+      }
+      
       break;
     } else {
       // 回転完了

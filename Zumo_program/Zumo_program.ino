@@ -34,6 +34,9 @@ float TARGET_HEADING = 0.0;       // 目標方位角（度）
 const float MAGNETIC_DECLINATION = -7.67;  // 磁気偏角（度、地域によって異なる）
 const char ROBOT_NAME[] PROGMEM = "oka";  // ← ロボット名（必要に応じて変更）
 
+// ★追加: ゴールの色を記憶する変数（初期値は赤 true にしておく）
+bool GOAL_IS_RED = true;
+
 // ============================================
 // ボタン待機関数（簡略版）
 // ============================================
@@ -129,8 +132,10 @@ void setup() {
   if (Serial.available()) {
     char c = Serial.read();
     if (c == 'B') {
+      GOAL_IS_RED = false; // ★青なら false
       Serial.println("GOAL_COLOR:B");  //確認送信
     } else if (c == 'R') {
+      GOAL_IS_RED = true;  // ★赤なら true
       Serial.println("GOAL_COLOR:R");  //確認送信
     } else {
       Serial.print(F("Unexpected color code: "));

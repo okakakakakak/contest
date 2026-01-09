@@ -182,17 +182,37 @@ void runClimbMode() {
   // 坂検知直後、後退せずにここからスタート
   // ========================================
   if (robot_state.climb_phase == 0) {
+
+    // ★追加: 色判定とパラメータ設定
+    float target_ay;
+    float spiral_offset;
+
+    if (GOAL_IS_RED) {
+        // [赤ゴール] 右手に見る → 右傾斜(-5500)、右旋回アプローチ(-100度)
+        target_ay = -5500.0; 
+        spiral_offset = -100.0; 
+    } else {
+        // [青ゴール] 左手に見る → 左傾斜(+5500)、左旋回アプローチ(+100度)
+        target_ay = 5500.0;  
+        spiral_offset = 100.0; 
+    }
+
     if (phase_start_time == 0) {
       phase_start_time = millis();
       spiral_integral = 0; // 積分項リセット
-      Serial.println(F("CLIMB Ph0: Spiral Start (ay=-6000)"));
+      Serial.println(F("CLIMB Ph0: Spiral. Color:"));
+      Serial.print(GOAL_IS_RED ? "RED" : "BLUE");
+      Serial.print(F(" TgtAY:"));
+      Serial.println(target_ay);
     }
 
     // --- 1. 目標方位に達したかチェック ---
-    // 目標: TARGET_HEADING - 100度 (自ゴールの左側からアプローチ)
-    // ※山を右に見るルートの場合です。左に見るなら +100 にしてください。
-    float target_spiral_end = TARGET_HEADING - 100.0;
-    if (target_spiral_end < 0) target_spiral_end += 360.0;
+    // TARGET_HEADING に spiral_offset を足してアプローチ方位を決める
+    float target_spiral_end = TARGET_HEADING + spiral_offset;
+
+    // 0-360度の範囲に正規化
+    while (target_spiral_end < 0) target_spiral_end += 360.0;
+    while (target_spiral_end >= 360.0) target_spiral_end -= 360.0;
 
     // 誤差計算
     float heading_error = target_spiral_end - compass_state.current_heading;
@@ -213,10 +233,7 @@ void runClimbMode() {
 // --- 2. 加速度(ay)を用いた PI制御 ---
     if (millis() - lastAccelRead > ACCEL_READ_INTERVAL) {
         compass_state.compass.readAcc();
-        float ay = compass_state.compass.a.y; 
-
-        // 目標値: -7000
-        float target_ay = -5500.0; 
+        float ay = compass_state.compass.a.y;  
 
         // 誤差: 目標 - 現在
         // ay が -2000(平坦)なら error = -6000 (大きい) -> uも大きい -> 強く回る
@@ -233,6 +250,11 @@ void runClimbMode() {
         
         // 積分の暴走防止
         spiral_integral = constrain(spiral_integral, -5000, 5000);
+
+        // 符号反転リセット
+        if ((error > 0 && spiral_integral < 0) || (error < 0 && spiral_integral > 0)) {
+             spiral_integral = 0; 
+        }
 
         // 制御量 u (誤差に比例する)
         float u = Kp * error + (Ki * spiral_integral);

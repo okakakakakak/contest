@@ -316,4 +316,7 @@ bool hasReachedTop();                     // 登頂判定
 void runClimbMode();                      // 登坂モード実行
 void calibrateAccelZOffset();             // Z軸オフセットキャリブレーション
 
+// ★追加: ゴール色フラグ（true=赤, false=青）を他のファイルと共有
+extern bool GOAL_IS_RED;
+
 #endif

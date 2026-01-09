@@ -573,6 +573,22 @@ case STATE_APPROACH: {
     }
   }
 
+    // ========================================
+  // フェーズ1: 時計回りに0.3秒回転
+  // ========================================
+  if (!rotation_done) {
+    if (millis() - robot_state.state_start_time < 500) {
+      // 時計回りに回転（左モーター正転、右モーター逆転）
+      motor_ctrl.setSpeeds(MOTOR_ROTATE, -MOTOR_ROTATE);
+      break;
+    } else {
+      // 回転完了
+      motor_ctrl.stop();
+      rotation_done = true;
+      delay(100);  // 安定化のための短い待機
+    }
+  }
+
   // ========================================
   // フェーズ2: 前進（接近）
   // ========================================

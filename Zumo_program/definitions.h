@@ -47,12 +47,10 @@
 #define STATE_ESCAPE            7   // 脱出状態（物体を運搬中）
 #define STATE_AVOID             8   // 回避状態（黒線を避ける）
 #define STATE_STOP              9   // 停止状態
-#define STATE_MOVE              10   // 移動状態（前進）
+#define STATE_MOVE              10  // 移動状態（前進）
 #define STATE_CLIMB             11  // 坂道登坂モード
-#define STATE_CHECK_ZONE        12  // ゾーン確認状態（STATE_CLIMBの挿入で1つずれる）
-#define STATE_DEPOSIT           13  // 預け入れ状態（STATE_CLIMBの挿入で1つずれる）
-#define STATE_STACK             14  // スタック検知モード
-#define STATE_CARRY_AVOID       15  // 運搬時回避
+#define STATE_STACK             12  // スタック検知モード
+#define STATE_CARRY_AVOID       13  // 運搬時回避
 
 
 // ============================================
@@ -214,8 +212,6 @@ struct RobotState {
   
   unsigned long time_now;   // 現在時刻
   unsigned long time_prev;  // 前回の時刻
-  
-  byte cups_delivered;  // 運搬したカップの数
 
   unsigned long last_carry_avoid_time; // 回避動作完了時刻（クールダウン用）
 
@@ -231,7 +227,7 @@ struct RobotState {
     mode(STATE_INIT), previous_mode(255),  // -1の代わりに255（byteの最大値）
     state_start_time(0), search_start_time(0), last_carry_avoid_time(0),
     search_rotation_count(0), object_detected_in_search(false),
-    time_now(0), time_prev(0), cups_delivered(0),
+    time_now(0), time_prev(0),
     climb_start_heading(0), climb_phase(0) {}
   
   // 時刻を更新する関数
@@ -283,8 +279,6 @@ struct MotorController {
 // 2. 回転時の回転不足検知用
 // 回転中なのに、200msでこれ以下しか回っていなかったら「引っかかっている」とみなす
 #define MIN_TURN_ANGLE            3.0   // 度 (少し厳しめに3.0度推奨)
-
-// ※ IMPACT_THRESHOLD は不要になったため削除しました
 
 // ============================================
 // グローバルオブジェクト（必要最小限）
